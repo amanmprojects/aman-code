@@ -1,11 +1,14 @@
 import React, { useState, useCallback } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Spacer, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
 import MessageList from './components/MessageList.js';
 import ModeIndicator from './components/ModeIndicator.js';
 import { useAgent } from './hooks/useAgent.js';
 import type { Mode } from './utils/permissions.js';
+import BigText from 'ink-big-text';
+import Divider from 'ink-divider';
+
 
 interface AppProps {
 	mode?: Mode;
@@ -29,17 +32,13 @@ export default function App({ mode = 'code' }: AppProps) {
 	);
 
 	return (
-		<Box flexDirection="column" padding={1}>
+		<Box flexDirection="column" paddingTop={0}>
 			{/* Header */}
-			<Box marginBottom={1}>
-				<Text bold color="cyan">
-					aman-code
-				</Text>
-				<Text> </Text>
-				<ModeIndicator mode={mode} />
-				<Text dimColor> — type your message below</Text>
+			<Box marginBottom={1} flexDirection="column">
+				<Divider />
+				<BigText text="aman-code" />
+				<Divider />
 			</Box>
-
 			{/* Messages */}
 			<MessageList messages={messages} />
 
@@ -65,10 +64,9 @@ export default function App({ mode = 'code' }: AppProps) {
 				borderStyle="single"
 				borderLeft={false}
 				borderRight={false}
-				borderBottom={false}
 				flexDirection="row"
 			>
-				<ModeIndicator mode={mode} />
+
 				<Text> ❯ </Text>
 				<TextInput
 					value={input}
@@ -76,6 +74,11 @@ export default function App({ mode = 'code' }: AppProps) {
 					onSubmit={handleSubmit}
 					placeholder={isLoading ? 'Waiting for response...' : 'Ask me anything...'}
 				/>
+			</Box>
+
+			{/* Bottom bar */}
+			<Box paddingLeft={1} paddingRight={1}>
+				<ModeIndicator mode={mode} /><Spacer /><Text>Press Ctrl+C to exit</Text>
 			</Box>
 		</Box>
 	);
