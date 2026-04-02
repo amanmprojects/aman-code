@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { createAgent } from '../agent/index.js';
 import type { Mode } from '../utils/permissions.js';
 
@@ -28,7 +28,17 @@ export function useAgent(mode: Mode) {
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const agentRef = useRef(createAgent(mode));
+	const agentModeRef = useRef<Mode>(mode);
 	const conversationRef = useRef<Array<{ role: string; content: string }>>([]);
+
+	useEffect(() => {
+		if (isLoading || agentModeRef.current === mode) {
+			return;
+		}
+
+		agentRef.current = createAgent(mode);
+		agentModeRef.current = mode;
+	}, [mode, isLoading]);
 
 	const sendMessage = useCallback(async (text: string) => {
 		setError(null);
