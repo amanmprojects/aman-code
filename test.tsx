@@ -1,17 +1,16 @@
 import React from 'react';
-import chalk from 'chalk';
 import test from 'ava';
 import {render} from 'ink-testing-library';
-import App from './source/app.js';
+import App from './src/app.js';
 
-test('greet unknown user', t => {
-	const {lastFrame} = render(<App name={undefined} />);
-
-	t.is(lastFrame(), `Hello, ${chalk.green('Stranger')}`);
+test('renders with default mode', t => {
+	const {lastFrame} = render(<App />);
+	// App renders without error with default mode
+	t.true(lastFrame()?.includes('aman-code'));
 });
 
-test('greet user with a name', t => {
-	const {lastFrame} = render(<App name="Jane" />);
-
-	t.is(lastFrame(), `Hello, ${chalk.green('Jane')}`);
+test('renders with plan mode', t => {
+	const {lastFrame} = render(<App mode="plan" />);
+	// App renders without error with plan mode
+	t.true(lastFrame()?.includes('aman-code'));
 });
