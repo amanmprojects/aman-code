@@ -7,6 +7,7 @@ import ModeIndicator from './components/ModeIndicator.js';
 import { useAgent } from './hooks/useAgent.js';
 import type { Mode } from './utils/permissions.js';
 import BigText from 'ink-big-text';
+import Divider from 'ink-divider';
 
 
 interface AppProps {
@@ -31,10 +32,12 @@ export default function App({ mode = 'code' }: AppProps) {
 	);
 
 	return (
-		<Box flexDirection="column" paddingTop={1}>
+		<Box flexDirection="column" paddingTop={0}>
 			{/* Header */}
 			<Box marginBottom={1} flexDirection="column">
+				<Divider />
 				<BigText text="aman-code" />
+				<Divider />
 			</Box>
 			{/* Messages */}
 			<MessageList messages={messages} />
