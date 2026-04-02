@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Box, Spacer, Text } from 'ink';
+import { Box, Spacer, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
 import MessageList from './components/MessageList.js';
@@ -14,9 +14,39 @@ interface AppProps {
 	mode?: Mode;
 }
 
-export default function App({ mode = 'code' }: AppProps) {
+const MODE_ORDER: Mode[] = ['plan', 'code', 'yolo'];
+
+export default function App({ mode: initialMode = 'code' }: AppProps) {
+	const [mode, setMode] = useState<Mode>(initialMode);
 	const [input, setInput] = useState('');
 	const { messages, isLoading, error, sendMessage } = useAgent(mode);
+
+	useInput((keyInput, key) => {
+		const isShiftTab = keyInput === '\u001B[Z' || (key.tab && key.shift);
+		const isTab = key.tab && !key.shift;
+
+		if (!isTab && !isShiftTab) {
+			return;
+		}
+
+		if (isLoading) {
+			return;
+		}
+
+		setMode(previousMode => {
+			const currentIndex = MODE_ORDER.indexOf(previousMode);
+			if (currentIndex === -1) {
+				return previousMode;
+			}
+
+			const nextIndex = isShiftTab
+				? (currentIndex - 1 + MODE_ORDER.length) % MODE_ORDER.length
+				: (currentIndex + 1) % MODE_ORDER.length;
+
+			const nextMode = MODE_ORDER[nextIndex];
+			return nextMode ?? previousMode;
+		});
+	});
 
 	const handleSubmit = useCallback(
 		(value: string) => {
@@ -78,7 +108,7 @@ export default function App({ mode = 'code' }: AppProps) {
 
 			{/* Bottom bar */}
 			<Box paddingLeft={1} paddingRight={1}>
-				<ModeIndicator mode={mode} /><Spacer /><Text>Press Ctrl+C to exit</Text>
+				<ModeIndicator mode={mode} /><Spacer /><Text>Tab/Shift+Tab to change mode • Ctrl+C to exit</Text>
 			</Box>
 		</Box>
 	);
