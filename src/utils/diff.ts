@@ -11,9 +11,9 @@ export function parseDiff(diffString: string): DiffLine[] {
 	for (const line of diffString.split('\n')) {
 		if (line.startsWith('@@')) {
 			lines.push({ type: 'header', content: line });
-		} else if (line.startsWith('+') && !line.startsWith('+++')) {
+		} else if (line.startsWith('+') && !(line === '+++' || line.startsWith('+++ '))) {
 			lines.push({ type: 'add', content: line });
-		} else if (line.startsWith('-') && !line.startsWith('---')) {
+		} else if (line.startsWith('-') && !(line === '---' || line.startsWith('--- '))) {
 			lines.push({ type: 'remove', content: line });
 		} else if (line.startsWith(' ')) {
 			lines.push({ type: 'context', content: line });
