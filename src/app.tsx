@@ -1,24 +1,82 @@
-import React, { useState } from 'react';
-import {Text, Box} from 'ink';
-import InputBox from './inputBox.js';
+import React, { useState, useCallback } from 'react';
+import { Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
+import Spinner from 'ink-spinner';
+import MessageList from './components/MessageList.js';
+import ModeIndicator from './components/ModeIndicator.js';
+import { useAgent } from './hooks/useAgent.js';
+import type { Mode } from './utils/permissions.js';
 
-// type Props = {
-// 	name: string | undefined;
-// };
+interface AppProps {
+	mode?: Mode;
+}
 
-export default function App() {
-	const [query, setQuery] = useState('');
-	const handleSubmit = () => {
-		console.log(query);
-	};
+export default function App({ mode = 'code' }: AppProps) {
+	const [input, setInput] = useState('');
+	const { messages, isLoading, error, sendMessage } = useAgent(mode);
+
+	const handleSubmit = useCallback(
+		(value: string) => {
+			const trimmed = value.trim();
+			if (!trimmed || isLoading) {
+				return;
+			}
+
+			setInput('');
+			sendMessage(trimmed);
+		},
+		[isLoading, sendMessage],
+	);
+
 	return (
-		<>
-		<Box>
-		<Text>
-			Hello, Welcome to <Text color="green">aman-code</Text>
-		</Text>
+		<Box flexDirection="column" padding={1}>
+			{/* Header */}
+			<Box marginBottom={1}>
+				<Text bold color="cyan">
+					aman-code
+				</Text>
+				<Text> </Text>
+				<ModeIndicator mode={mode} />
+				<Text dimColor> — type your message below</Text>
+			</Box>
+
+			{/* Messages */}
+			<MessageList messages={messages} />
+
+			{/* Loading indicator */}
+			{isLoading && messages.length > 0 && (
+				<Box marginBottom={1}>
+					<Text color="yellow">
+						<Spinner type="dots" />
+					</Text>
+					<Text dimColor> Thinking...</Text>
+				</Box>
+			)}
+
+			{/* Error display */}
+			{error && (
+				<Box marginBottom={1}>
+					<Text color="red">Error: {error}</Text>
+				</Box>
+			)}
+
+			{/* Input */}
+			<Box
+				borderStyle="single"
+				borderLeft={false}
+				borderRight={false}
+				borderBottom={false}
+				flexDirection="row"
+			>
+				<ModeIndicator mode={mode} />
+				<Text> ❯ </Text>
+				<TextInput
+					value={input}
+					onChange={setInput}
+					onSubmit={handleSubmit}
+					placeholder={isLoading ? 'Waiting for response...' : 'Ask me anything...'}
+				/>
+			</Box>
 		</Box>
-		<InputBox value={query} onChange={setQuery} placeholder='Type here' onSubmit={handleSubmit}/>
-		</>
 	);
 }
