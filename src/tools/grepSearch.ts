@@ -130,7 +130,13 @@ function parseRipgrepRecords(stdout: string): ParsedRipgrepRecord[] {
 			continue;
 		}
 
-		const message = JSON.parse(rawLine) as RipgrepOutputRecord;
+		let message: RipgrepOutputRecord;
+		try {
+			message = JSON.parse(rawLine) as RipgrepOutputRecord;
+		} catch {
+			continue;
+		}
+
 		if (message.type !== 'match' && message.type !== 'context') {
 			continue;
 		}

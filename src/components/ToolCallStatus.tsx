@@ -429,9 +429,8 @@ export default memo(ToolCallStatus, (prevProps, nextProps) => {
 
 	switch (nextPart.state) {
 		case 'input-streaming':
-			return deepEqual(prevPart.input, nextPart.input);
 		case 'input-available':
-			return deepEqual(prevPart.input, nextPart.input);
+			return true;
 		case 'approval-requested':
 			return deepEqual(prevPart.approval, nextPart.approval);
 		case 'approval-responded':

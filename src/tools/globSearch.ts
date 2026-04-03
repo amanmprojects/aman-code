@@ -107,14 +107,14 @@ function matchesAnyPattern(value: string, patterns: RegExp[]): boolean {
 /**
  * Recursively collects filesystem entries under `currentPath` whose paths (relative to `rootPath`) match `pattern` and `searchType`, returning each match with its modification time.
  *
- * Skips symbolic links and directories named in `EXCLUDED_DIRECTORIES`. Paths are compared against `excludePatterns` using the relative path from `rootPath` with forward-slash separators. Recursion does not descend beyond `maxDepth` (when provided); `depth` is the current recursion depth with 0 representing `rootPath`.
+ * Skips symbolic links and directories named in `EXCLUDED_DIRECTORIES`. Paths are compared against `excludePatterns` using the relative path from `rootPath` with forward-slash separators. When `maxDepth` is provided, it is inclusive relative to `rootPath`: `0` searches only direct children of `rootPath`, `1` includes one nested directory level, and so on.
  *
  * @param options.rootPath - Base directory used to compute relative paths for matching and exclusions
  * @param options.currentPath - Directory to search in this call (may be a nested directory during recursion)
  * @param options.pattern - Regex that candidate relative paths must match to be included
  * @param options.excludePatterns - Regexes that, if any match a relative path, cause that entry (and its subtree) to be skipped
  * @param options.searchType - Controls whether to include files, directories, or both
- * @param options.maxDepth - Optional maximum recursion depth (inclusive behavior governed by `depth`)
+ * @param options.maxDepth - Optional maximum recursion depth relative to `rootPath`; inclusive, with `0` meaning direct children only
  * @param options.depth - Current recursion depth; 0 corresponds to `rootPath`
  * @returns An array of objects each containing `filePath` (absolute path to the match) and `mtimeMs` (its modification time in milliseconds)
  */
@@ -179,7 +179,7 @@ async function collectMatches(options: {
 
 		if (
 			entry.isDirectory() &&
-			(maxDepth === undefined || nextDepth < maxDepth)
+			(maxDepth === undefined || nextDepth <= maxDepth)
 		) {
 			const nestedMatches = await collectMatches({
 				rootPath,
@@ -229,7 +229,9 @@ export const globSearch = tool({
 			.int()
 			.nonnegative()
 			.optional()
-			.describe('Maximum directory depth to search'),
+			.describe(
+				'Maximum directory depth relative to the search root. 0 searches direct children only, 1 includes one nested level, and so on.',
+			),
 		excludes: z
 			.array(z.string())
 			.optional()
@@ -326,9 +328,7 @@ export const globSearch = tool({
 
 			matches.sort((left, right) => right.mtimeMs - left.mtimeMs);
 
-			const pagedMatches = includeTotalMatches
-				? matches.slice(offset, offset + limit)
-				: matches.slice(offset, offset + limit);
+			const pagedMatches = matches.slice(offset, offset + limit);
 			const truncated = includeTotalMatches
 				? offset + pagedMatches.length < matches.length
 				: matches.length >= offset + limit;

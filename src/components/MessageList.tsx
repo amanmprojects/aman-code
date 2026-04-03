@@ -32,10 +32,6 @@ function equalPart(
 			prevToolPart['toolName'] === nextToolPart['toolName'] &&
 			JSON.stringify(prevToolPart['input']) ===
 				JSON.stringify(nextToolPart['input']) &&
-			JSON.stringify(prevToolPart['args']) ===
-				JSON.stringify(nextToolPart['args']) &&
-			JSON.stringify(prevToolPart['result']) ===
-				JSON.stringify(nextToolPart['result']) &&
 			JSON.stringify(prevToolPart['output']) ===
 				JSON.stringify(nextToolPart['output']) &&
 			JSON.stringify(prevToolPart['approval']) ===
