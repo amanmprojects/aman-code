@@ -87,7 +87,7 @@ export default function InteractivePrompt({
 
 			void onSubmitAnswer(answer);
 		}
-	});
+	}, { isActive: !disabled });
 
 	return (
 		<Box flexDirection="column" borderStyle="round" paddingX={1} paddingY={0} marginTop={1}>
@@ -110,12 +110,14 @@ export default function InteractivePrompt({
 							? '❯'
 							: ' ';
 
+					const hasDescription = typeof option.description === 'string' && option.description.length > 0;
+
 					return (
-						<Box key={option.id} flexDirection="column" marginBottom={option.description ? 1 : 0}>
+						<Box key={option.id} flexDirection="column" marginBottom={hasDescription ? 1 : 0}>
 							<Text color={isFocused ? 'green' : undefined}>
 								{marker} {option.label}
 							</Text>
-							{option.description ? <Text dimColor>{option.description}</Text> : null}
+							{hasDescription ? <Text dimColor>{option.description}</Text> : null}
 						</Box>
 					);
 				})}
