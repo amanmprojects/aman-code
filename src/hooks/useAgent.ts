@@ -1,30 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
 import { createAgent } from '../agent/index.js';
 import type { Mode } from '../utils/permissions.js';
+import type { UIMessage, DynamicToolUIPart } from 'ai';
 
-export interface ToolCallInfo {
-	id: string;
-	toolName: string;
-	args: Record<string, any>;
-	status: 'running' | 'done' | 'error';
-	result?: any;
-	error?: string;
-}
-
-export interface MessagePart {
-	type: 'text' | 'tool-call';
-	text?: string;
-	toolCall?: ToolCallInfo;
-}
-
-export interface ChatMessage {
-	role: 'user' | 'assistant';
-	content: string;
-	parts: MessagePart[];
+let msgCounter = 0;
+function generateId() {
+	return `msg-${Date.now()}-${++msgCounter}`;
 }
 
 export function useAgent(mode: Mode) {
-	const [messages, setMessages] = useState<ChatMessage[]>([]);
+	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const agentRef = useRef(createAgent(mode));
@@ -34,9 +19,9 @@ export function useAgent(mode: Mode) {
 		setError(null);
 		setIsLoading(true);
 
-		const userMessage: ChatMessage = {
+		const userMessage: UIMessage = {
+			id: generateId(),
 			role: 'user',
-			content: text,
 			parts: [{ type: 'text', text }],
 		};
 
@@ -44,9 +29,9 @@ export function useAgent(mode: Mode) {
 
 		conversationRef.current.push({ role: 'user', content: text });
 
-		const assistantMessage: ChatMessage = {
+		const assistantMessage: UIMessage = {
+			id: generateId(),
 			role: 'assistant',
-			content: '',
 			parts: [],
 		};
 
@@ -58,16 +43,16 @@ export function useAgent(mode: Mode) {
 			});
 
 			let currentText = '';
-			const toolCalls = new Map<string, ToolCallInfo>();
+			const toolCalls = new Map<string, DynamicToolUIPart>();
 
 			const updateAssistant = () => {
-				const parts: MessagePart[] = [];
+				const parts: UIMessage['parts'] = [];
 				if (currentText) {
 					parts.push({ type: 'text', text: currentText });
 				}
 
 				for (const tc of toolCalls.values()) {
-					parts.push({ type: 'tool-call', toolCall: tc });
+					parts.push(tc);
 				}
 
 				setMessages(prev => {
@@ -76,7 +61,6 @@ export function useAgent(mode: Mode) {
 					if (last && last.role === 'assistant') {
 						updated[updated.length - 1] = {
 							...last,
-							content: currentText,
 							parts,
 						};
 					}
@@ -95,10 +79,11 @@ export function useAgent(mode: Mode) {
 
 					case 'tool-input-start': {
 						toolCalls.set(part.id, {
-							id: part.id,
+							type: 'dynamic-tool',
+							toolCallId: part.id,
 							toolName: part.toolName,
-							args: {},
-							status: 'running',
+							state: 'input-streaming',
+							input: undefined,
 						});
 						updateAssistant();
 						break;
@@ -107,7 +92,11 @@ export function useAgent(mode: Mode) {
 					case 'tool-call': {
 						const existing = toolCalls.get((part as any).toolCallId);
 						if (existing) {
-							existing.args = (part as any).input as Record<string, any>;
+							toolCalls.set((part as any).toolCallId, {
+								...existing,
+								state: 'input-available',
+								input: (part as any).input,
+							} as DynamicToolUIPart);
 						}
 
 						updateAssistant();
@@ -117,8 +106,11 @@ export function useAgent(mode: Mode) {
 					case 'tool-result': {
 						const tc = toolCalls.get((part as any).toolCallId);
 						if (tc) {
-							tc.status = 'done';
-							tc.result = (part as any).output;
+							toolCalls.set((part as any).toolCallId, {
+								...tc,
+								state: 'output-available',
+								output: (part as any).output,
+							} as DynamicToolUIPart);
 						}
 
 						updateAssistant();
@@ -128,8 +120,12 @@ export function useAgent(mode: Mode) {
 					case 'tool-error': {
 						const tc2 = toolCalls.get((part as any).toolCallId);
 						if (tc2) {
-							tc2.status = 'error';
-							tc2.error = String((part as any).error ?? 'Tool execution failed');
+							toolCalls.set((part as any).toolCallId, {
+								...tc2,
+								state: 'output-error',
+								input: tc2.input,
+								errorText: String((part as any).error ?? 'Tool execution failed'),
+							} as DynamicToolUIPart);
 						}
 
 						updateAssistant();
