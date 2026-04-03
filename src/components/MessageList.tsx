@@ -1,14 +1,95 @@
-import React, { memo } from 'react';
-import { Box } from 'ink';
+import React, {memo} from 'react';
+import {Box} from 'ink';
 import AssistantMessage from './AssistantMessage.js';
 import UserMessage from './UserMessage.js';
-import type { UIMessage } from 'ai';
+import type {UIMessage} from 'ai';
 
 interface MessageListProps {
 	messages: UIMessage[];
 }
 
-function MessageList({ messages }: MessageListProps) {
+function equalPart(
+	prevPart: UIMessage['parts'][number],
+	nextPart: UIMessage['parts'][number],
+): boolean {
+	if (prevPart?.type !== nextPart?.type) {
+		return false;
+	}
+
+	if (prevPart?.type === 'text' && nextPart?.type === 'text') {
+		return prevPart.text === nextPart.text;
+	}
+
+	if (
+		prevPart?.type?.startsWith('tool-') &&
+		nextPart?.type?.startsWith('tool-')
+	) {
+		const prevToolPart = prevPart as Record<string, unknown>;
+		const nextToolPart = nextPart as Record<string, unknown>;
+		return (
+			prevToolPart['state'] === nextToolPart['state'] &&
+			prevToolPart['toolCallId'] === nextToolPart['toolCallId'] &&
+			prevToolPart['toolName'] === nextToolPart['toolName'] &&
+			JSON.stringify(prevToolPart['input']) ===
+				JSON.stringify(nextToolPart['input']) &&
+			JSON.stringify(prevToolPart['args']) ===
+				JSON.stringify(nextToolPart['args']) &&
+			JSON.stringify(prevToolPart['result']) ===
+				JSON.stringify(nextToolPart['result']) &&
+			JSON.stringify(prevToolPart['output']) ===
+				JSON.stringify(nextToolPart['output']) &&
+			JSON.stringify(prevToolPart['approval']) ===
+				JSON.stringify(nextToolPart['approval']) &&
+			prevToolPart['errorText'] === nextToolPart['errorText']
+		);
+	}
+
+	return JSON.stringify(prevPart) === JSON.stringify(nextPart);
+}
+
+function equalMessage(prevMessage: UIMessage, nextMessage: UIMessage): boolean {
+	if (
+		prevMessage.id !== nextMessage.id ||
+		prevMessage.role !== nextMessage.role
+	) {
+		return false;
+	}
+
+	if (prevMessage.parts.length !== nextMessage.parts.length) {
+		return false;
+	}
+
+	for (let index = 0; index < prevMessage.parts.length; index += 1) {
+		const prevPart = prevMessage.parts[index]!;
+		const nextPart = nextMessage.parts[index]!;
+		if (!equalPart(prevPart, nextPart)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+function equalMessages(
+	prevMessages: UIMessage[],
+	nextMessages: UIMessage[],
+): boolean {
+	if (prevMessages.length !== nextMessages.length) {
+		return false;
+	}
+
+	for (let index = 0; index < prevMessages.length; index += 1) {
+		const prevMessage = prevMessages[index]!;
+		const nextMessage = nextMessages[index]!;
+		if (!equalMessage(prevMessage, nextMessage)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+function MessageList({messages}: MessageListProps) {
 	return (
 		<Box flexDirection="column">
 			{messages.map((msg, index) => {
@@ -24,86 +105,6 @@ function MessageList({ messages }: MessageListProps) {
 	);
 }
 
-// Memoize to prevent re-renders when parent state changes but messages haven't
-export default memo(MessageList, (prevProps, nextProps) => {
-	// Re-render if message count changes
-	if (prevProps.messages.length !== nextProps.messages.length) {
-		return false;
-	}
-
-	// Check if last message changed (most common update pattern)
-	const lastPrev = prevProps.messages[prevProps.messages.length - 1];
-	const lastNext = nextProps.messages[nextProps.messages.length - 1];
-
-	// If IDs differ, re-render
-	if (lastPrev?.id !== lastNext?.id) {
-		return false;
-	}
-
-	// Also check for in-place content updates (streaming, tool-part updates)
-	// Compare parts for assistant messages (which have tool parts)
-	if (lastPrev?.role === 'assistant' && lastNext?.role === 'assistant') {
-		const prevParts = lastPrev.parts;
-		const nextParts = lastNext.parts;
-		if (prevParts?.length !== nextParts?.length) {
-			return false;
-		}
-		// Compare all corresponding parts for content changes
-		if (prevParts && nextParts) {
-			for (let i = 0; i < prevParts.length; i++) {
-				const prevPart = prevParts[i];
-				const nextPart = nextParts[i];
-				// Compare type
-				if (prevPart?.type !== nextPart?.type) {
-					return false;
-				}
-				// For tool parts, compare state
-				if (prevPart?.type?.startsWith('tool-') && nextPart?.type?.startsWith('tool-')) {
-					const prevToolPart = prevPart as { state?: string };
-					const nextToolPart = nextPart as { state?: string };
-					if (prevToolPart?.state !== nextToolPart?.state) {
-						return false;
-					}
-				}
-				// For text parts, compare text content (handles streaming)
-				if (prevPart?.type === 'text' && nextPart?.type === 'text') {
-					const prevTextPart = prevPart as { text?: string };
-					const nextTextPart = nextPart as { text?: string };
-					if (prevTextPart?.text !== nextTextPart?.text) {
-						return false;
-					}
-				}
-			}
-		}
-	}
-
-	// Compare parts for user messages too (user messages store content in parts)
-	if (lastPrev?.role === 'user' && lastNext?.role === 'user') {
-		const prevParts = lastPrev.parts;
-		const nextParts = lastNext.parts;
-		if (prevParts?.length !== nextParts?.length) {
-			return false;
-		}
-		// Compare all parts for content changes
-		if (prevParts && nextParts) {
-			for (let i = 0; i < prevParts.length; i++) {
-				const prevPart = prevParts[i];
-				const nextPart = nextParts[i];
-				if (prevPart?.type !== nextPart?.type) {
-					return false;
-				}
-				// For text parts, compare text content
-				if (prevPart?.type === 'text' && nextPart?.type === 'text') {
-					const prevTextPart = prevPart as { text?: string };
-					const nextTextPart = nextPart as { text?: string };
-					if (prevTextPart?.text !== nextTextPart?.text) {
-						return false;
-					}
-				}
-			}
-		}
-	}
-
-	// All checks passed, skip re-render
-	return true;
-});
+export default memo(MessageList, (prevProps, nextProps) =>
+	equalMessages(prevProps.messages, nextProps.messages),
+);

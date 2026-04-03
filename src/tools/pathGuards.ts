@@ -1,0 +1,35 @@
+const BLOCKED_DEVICE_PATHS = new Set([
+	'/dev/zero',
+	'/dev/random',
+	'/dev/urandom',
+	'/dev/full',
+	'/dev/stdin',
+	'/dev/tty',
+	'/dev/console',
+	'/dev/stdout',
+	'/dev/stderr',
+	'/dev/fd/0',
+	'/dev/fd/1',
+	'/dev/fd/2',
+]);
+
+export function isBlockedDevicePath(filePath: string): boolean {
+	if (BLOCKED_DEVICE_PATHS.has(filePath)) {
+		return true;
+	}
+
+	if (
+		filePath.startsWith('/proc/') &&
+		(filePath.endsWith('/fd/0') ||
+			filePath.endsWith('/fd/1') ||
+			filePath.endsWith('/fd/2'))
+	) {
+		return true;
+	}
+
+	return false;
+}
+
+export function isUNCPath(filePath: string): boolean {
+	return filePath.startsWith('\\\\') || filePath.startsWith('//');
+}

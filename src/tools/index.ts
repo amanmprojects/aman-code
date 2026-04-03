@@ -1,18 +1,18 @@
-import { readFile } from './readFile.js';
-import { writeFile } from './writeFile.js';
-import { editFile } from './editFile.js';
-import { executeCommand, isDangerousCommand } from './executeCommand.js';
-import { grepSearch } from './grepSearch.js';
-import { globSearch } from './globSearch.js';
-import { listDir } from './listDir.js';
-import { toolSearch } from './toolSearch.js';
-import { webSearch } from './webSearch.js';
-import { askUserQuestion } from './askUserQuestion.js';
-import { exitPlanMode } from './exitPlanMode.js';
-import { todoWrite } from './todoWrite.js';
-import { tool } from 'ai';
-import { z } from 'zod';
-import type { Mode } from '../utils/permissions.js';
+import {readFile} from './readFile.js';
+import {writeFile} from './writeFile.js';
+import {editFile} from './editFile.js';
+import {executeCommand, isDangerousCommand} from './executeCommand.js';
+import {grepSearch} from './grepSearch.js';
+import {globSearch} from './globSearch.js';
+import {listDir} from './listDir.js';
+import {toolSearch} from './toolSearch.js';
+import {webSearch} from './webSearch.js';
+import {askUserQuestion} from './askUserQuestion.js';
+import {exitPlanMode} from './exitPlanMode.js';
+import {todoWrite} from './todoWrite.js';
+import {tool} from 'ai';
+import {z} from 'zod';
+import type {Mode} from '../utils/permissions.js';
 
 export {
 	readFile,
@@ -30,11 +30,18 @@ export {
 };
 
 const executeCommandWithModeSafety = tool({
-	description: (executeCommand as any).description ?? 'Execute a shell command and return its output.',
+	description:
+		(executeCommand as any).description ??
+		'Execute a shell command and return its output.',
 	inputSchema: z.object({
 		command: z.string().describe('The shell command to execute'),
 		cwd: z.string().optional().describe('Working directory for the command.'),
-		timeoutMs: z.number().int().positive().max(5 * 60_000).optional(),
+		timeoutMs: z
+			.number()
+			.int()
+			.positive()
+			.max(30 * 60_000)
+			.optional(),
 		maxOutputChars: z.number().int().positive().max(200_000).optional(),
 		background: z.boolean().optional(),
 	}),
@@ -46,9 +53,11 @@ const executeCommandWithModeSafety = tool({
 			maxOutputChars?: number;
 			background?: boolean;
 		},
-		toolOptions: { experimental_context?: unknown },
+		toolOptions: {experimental_context?: unknown},
 	) => {
-		const context = toolOptions.experimental_context as { mode?: Mode } | undefined;
+		const context = toolOptions.experimental_context as
+			| {mode?: Mode}
+			| undefined;
 
 		if (context?.mode === 'plan') {
 			return {
@@ -82,4 +91,3 @@ export const allTools = {
 };
 
 export type AgentToolName = keyof typeof allTools;
-

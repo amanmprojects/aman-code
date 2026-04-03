@@ -1,4 +1,4 @@
-import type { Mode } from '../utils/permissions.js';
+import type {Mode} from '../utils/permissions.js';
 
 export type ToolMetadata = {
 	description: string;
@@ -7,7 +7,21 @@ export type ToolMetadata = {
 	allowedModes: Mode[];
 };
 
-export const toolMetadata: Record<string, ToolMetadata> = {
+export type ToolName =
+	| 'readFile'
+	| 'writeFile'
+	| 'editFile'
+	| 'executeCommand'
+	| 'grepSearch'
+	| 'globSearch'
+	| 'listDir'
+	| 'toolSearch'
+	| 'webSearch'
+	| 'askUserQuestion'
+	| 'exitPlanMode'
+	| 'todoWrite';
+
+export const toolMetadata = {
 	readFile: {
 		description:
 			'Read the contents of a file at the specified path. Returns the file contents with line numbers. Use this to understand existing code before making changes.',
@@ -74,7 +88,7 @@ export const toolMetadata: Record<string, ToolMetadata> = {
 			'Ask the user to confirm leaving plan mode and beginning implementation work.',
 		readOnly: true,
 		interactive: true,
-		allowedModes: ['plan', 'code', 'yolo'],
+		allowedModes: ['plan'],
 	},
 	todoWrite: {
 		description:
@@ -82,9 +96,7 @@ export const toolMetadata: Record<string, ToolMetadata> = {
 		readOnly: false,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
-};
-
-export type ToolName = keyof typeof toolMetadata;
+} as const satisfies Record<ToolName, ToolMetadata>;
 
 export const allToolNames = Object.keys(toolMetadata) as ToolName[];
 
@@ -94,8 +106,8 @@ export function getToolMetadata(name: string): ToolMetadata | undefined {
 
 export function getAllowedToolNamesForMode(mode: Mode): Set<ToolName> {
 	return new Set(
-		allToolNames.filter((name) => {
-			const metadata = toolMetadata[name];
+		allToolNames.filter(name => {
+			const metadata = toolMetadata[name] as ToolMetadata | undefined;
 			return metadata != null && metadata.allowedModes.includes(mode);
 		}),
 	);
@@ -103,13 +115,14 @@ export function getAllowedToolNamesForMode(mode: Mode): Set<ToolName> {
 
 export function getReadOnlyToolNames(): Set<ToolName> {
 	return new Set(
-		allToolNames.filter((name) => {
-			const metadata = toolMetadata[name];
+		allToolNames.filter(name => {
+			const metadata = toolMetadata[name] as ToolMetadata | undefined;
 			return metadata != null && metadata.readOnly;
 		}),
 	);
 }
 
 export function isInteractiveToolName(name: string): boolean {
-	return toolMetadata[name as ToolName]?.interactive === true;
+	const metadata = toolMetadata[name as ToolName] as ToolMetadata | undefined;
+	return metadata?.interactive === true;
 }

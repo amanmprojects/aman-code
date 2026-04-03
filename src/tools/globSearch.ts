@@ -1,5 +1,5 @@
-import { tool } from 'ai';
-import { z } from 'zod';
+import {tool} from 'ai';
+import {z} from 'zod';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 
@@ -29,7 +29,9 @@ function globToRegExp(pattern: string): RegExp {
 
 		if (character === '*') {
 			if (nextCharacter === '*') {
-				const isSegmentGlob = followingCharacter === '/' && (index === 0 || previousCharacter === '/');
+				const isSegmentGlob =
+					followingCharacter === '/' &&
+					(index === 0 || previousCharacter === '/');
 
 				if (isSegmentGlob) {
 					expression += '(?:.*\\/)?';
@@ -64,7 +66,11 @@ function globToRegExp(pattern: string): RegExp {
 
 function toDisplayPath(filePath: string): string {
 	const relativePath = path.relative(process.cwd(), filePath);
-	if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+	if (
+		!relativePath ||
+		relativePath.startsWith('..') ||
+		path.isAbsolute(relativePath)
+	) {
 		return filePath;
 	}
 
@@ -80,7 +86,7 @@ function matchesType(type: SearchType, isDirectory: boolean): boolean {
 }
 
 function matchesAnyPattern(value: string, patterns: RegExp[]): boolean {
-	return patterns.some((pattern) => pattern.test(value));
+	return patterns.some(pattern => pattern.test(value));
 }
 
 async function collectMatches(options: {
@@ -91,10 +97,20 @@ async function collectMatches(options: {
 	searchType: SearchType;
 	maxDepth?: number;
 	depth: number;
-}): Promise<Array<{ filePath: string; mtimeMs: number }>> {
-	const { rootPath, currentPath, pattern, excludePatterns, searchType, maxDepth, depth } = options;
-	const entries = await fs.readdir(currentPath, { withFileTypes: true });
-	const matches: Array<{ filePath: string; mtimeMs: number }> = [];
+	stopAfter?: number;
+}): Promise<Array<{filePath: string; mtimeMs: number}>> {
+	const {
+		rootPath,
+		currentPath,
+		pattern,
+		excludePatterns,
+		searchType,
+		maxDepth,
+		depth,
+		stopAfter,
+	} = options;
+	const entries = await fs.readdir(currentPath, {withFileTypes: true});
+	const matches: Array<{filePath: string; mtimeMs: number}> = [];
 
 	for (const entry of entries) {
 		if (entry.isSymbolicLink()) {
@@ -106,7 +122,10 @@ async function collectMatches(options: {
 		}
 
 		const absolutePath = path.join(currentPath, entry.name);
-		const relativePath = path.relative(rootPath, absolutePath).split(path.sep).join('/');
+		const relativePath = path
+			.relative(rootPath, absolutePath)
+			.split(path.sep)
+			.join('/');
 		const nextDepth = depth + 1;
 
 		if (matchesAnyPattern(relativePath, excludePatterns)) {
@@ -117,23 +136,38 @@ async function collectMatches(options: {
 			continue;
 		}
 
-		if (pattern.test(relativePath) && matchesType(searchType, entry.isDirectory())) {
+		if (
+			pattern.test(relativePath) &&
+			matchesType(searchType, entry.isDirectory())
+		) {
 			const stats = await fs.stat(absolutePath);
-			matches.push({ filePath: absolutePath, mtimeMs: stats.mtimeMs });
+			matches.push({filePath: absolutePath, mtimeMs: stats.mtimeMs});
+
+			if (stopAfter !== undefined && matches.length >= stopAfter) {
+				return matches;
+			}
 		}
 
-		if (entry.isDirectory() && (maxDepth === undefined || nextDepth < maxDepth)) {
-			matches.push(
-				...(await collectMatches({
-					rootPath,
-					currentPath: absolutePath,
-					pattern,
-					excludePatterns,
-					searchType,
-					maxDepth,
-					depth: nextDepth,
-				})),
-			);
+		if (
+			entry.isDirectory() &&
+			(maxDepth === undefined || nextDepth < maxDepth)
+		) {
+			const nestedMatches = await collectMatches({
+				rootPath,
+				currentPath: absolutePath,
+				pattern,
+				excludePatterns,
+				searchType,
+				maxDepth,
+				depth: nextDepth,
+				stopAfter:
+					stopAfter === undefined ? undefined : stopAfter - matches.length,
+			});
+			matches.push(...nestedMatches);
+
+			if (stopAfter !== undefined && matches.length >= stopAfter) {
+				return matches;
+			}
 		}
 	}
 
@@ -144,11 +178,15 @@ export const globSearch = tool({
 	description:
 		'Fast file pattern matching tool that works across codebases. Supports glob patterns like "**/*.js" or "src/**/*.ts" and returns matching paths sorted by modification time.',
 	inputSchema: z.object({
-		pattern: z.string().describe('Glob pattern to match, e.g. "*.ts", "src/**/*.tsx"'),
+		pattern: z
+			.string()
+			.describe('Glob pattern to match, e.g. "*.ts", "src/**/*.tsx"'),
 		path: z
 			.string()
 			.optional()
-			.describe('The directory to search in. If omitted, the current working directory is used.'),
+			.describe(
+				'The directory to search in. If omitted, the current working directory is used.',
+			),
 		searchPath: z
 			.string()
 			.optional()
@@ -172,7 +210,9 @@ export const globSearch = tool({
 			.int()
 			.nonnegative()
 			.optional()
-			.describe('Number of matches to skip before returning results. Defaults to 0.'),
+			.describe(
+				'Number of matches to skip before returning results. Defaults to 0.',
+			),
 		limit: z
 			.number()
 			.int()
@@ -180,13 +220,31 @@ export const globSearch = tool({
 			.max(1000)
 			.optional()
 			.describe('Maximum number of results to return. Defaults to 100.'),
+		includeTotalMatches: z
+			.boolean()
+			.optional()
+			.describe(
+				'If true, scan the full tree and return totalMatches. Default: false.',
+			),
 	}),
-	execute: async ({ pattern, path: inputPath, searchPath, type = 'any', maxDepth, excludes = [], offset = 0, limit = DEFAULT_LIMIT }) => {
+	execute: async ({
+		pattern,
+		path: inputPath,
+		searchPath,
+		type = 'any',
+		maxDepth,
+		excludes = [],
+		offset = 0,
+		limit = DEFAULT_LIMIT,
+		includeTotalMatches = false,
+	}) => {
 		const start = Date.now();
 		try {
 			const requestedPath = inputPath ?? searchPath;
-			const resolved = requestedPath ? path.resolve(requestedPath) : process.cwd();
-			const excludePatterns = excludes.map((value) => globToRegExp(value));
+			const resolved = requestedPath
+				? path.resolve(requestedPath)
+				: process.cwd();
+			const excludePatterns = excludes.map(value => globToRegExp(value));
 			let stats;
 
 			try {
@@ -194,7 +252,9 @@ export const globSearch = tool({
 			} catch (error: any) {
 				if (error?.code === 'ENOENT') {
 					return {
-						error: `Directory does not exist: ${requestedPath ?? resolved}. Current working directory: ${process.cwd()}.`,
+						error: `Directory does not exist: ${
+							requestedPath ?? resolved
+						}. Current working directory: ${process.cwd()}.`,
 					};
 				}
 
@@ -202,7 +262,7 @@ export const globSearch = tool({
 			}
 
 			if (!stats.isDirectory()) {
-				return { error: `Path is not a directory: ${requestedPath ?? resolved}` };
+				return {error: `Path is not a directory: ${requestedPath ?? resolved}`};
 			}
 
 			const matches = await collectMatches({
@@ -213,13 +273,20 @@ export const globSearch = tool({
 				searchType: type,
 				maxDepth,
 				depth: 0,
+				...(includeTotalMatches ? {} : {stopAfter: offset + limit}),
 			});
 
 			matches.sort((left, right) => right.mtimeMs - left.mtimeMs);
 
-			const pagedMatches = matches.slice(offset, offset + limit);
-			const truncated = offset + pagedMatches.length < matches.length;
-			const filenames = pagedMatches.map(match => toDisplayPath(match.filePath));
+			const pagedMatches = includeTotalMatches
+				? matches.slice(offset, offset + limit)
+				: matches.slice(offset, offset + limit);
+			const truncated = includeTotalMatches
+				? offset + pagedMatches.length < matches.length
+				: matches.length >= offset + limit;
+			const filenames = pagedMatches.map(match =>
+				toDisplayPath(match.filePath),
+			);
 
 			return {
 				pattern,
@@ -227,17 +294,18 @@ export const globSearch = tool({
 				searchPath: resolved,
 				offset,
 				limit,
+				includeTotalMatches,
 				excludes,
 				durationMs: Date.now() - start,
 				numFiles: filenames.length,
-				totalMatches: matches.length,
+				...(includeTotalMatches ? {totalMatches: matches.length} : {}),
 				filenames,
 				resultCount: filenames.length,
 				truncated,
 				results: filenames,
 			};
 		} catch (error: any) {
-			return { error: `Search failed: ${error.message}` };
+			return {error: `Search failed: ${error.message}`};
 		}
 	},
 });

@@ -1,7 +1,8 @@
-import { tool } from 'ai';
-import { z } from 'zod';
+import {tool} from 'ai';
+import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
 
 const DEFAULT_LIMIT = 200;
 
@@ -17,7 +18,11 @@ type DirectoryEntryResult = {
 
 function toDisplayPath(targetPath: string): string {
 	const relativePath = path.relative(process.cwd(), targetPath);
-	if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+	if (
+		!relativePath ||
+		relativePath.startsWith('..') ||
+		path.isAbsolute(relativePath)
+	) {
 		return targetPath;
 	}
 
@@ -52,22 +57,48 @@ export const listDir = tool({
 		path: z
 			.string()
 			.optional()
-			.describe('The directory to list. Defaults to the current working directory.'),
+			.describe(
+				'The directory to list. Defaults to the current working directory.',
+			),
 		includeHidden: z
 			.boolean()
 			.optional()
-			.describe('Whether to include dotfiles and dot-directories. Defaults to false.'),
+			.describe(
+				'Whether to include dotfiles and dot-directories. Defaults to false.',
+			),
 		limit: z
 			.number()
 			.int()
 			.positive()
 			.max(1000)
 			.optional()
-			.describe('Maximum number of directory entries to return. Defaults to 200.'),
+			.describe(
+				'Maximum number of directory entries to return. Defaults to 200.',
+			),
 	}),
-	execute: async ({ path: inputPath, includeHidden = false, limit = DEFAULT_LIMIT }) => {
+	execute: async ({
+		path: inputPath,
+		includeHidden = false,
+		limit = DEFAULT_LIMIT,
+	}) => {
 		try {
 			const resolvedPath = inputPath ? path.resolve(inputPath) : process.cwd();
+
+			if (isUNCPath(resolvedPath)) {
+				return {
+					error: `Cannot list UNC path: ${
+						inputPath ?? resolvedPath
+					}. Use a local path instead.`,
+				};
+			}
+
+			if (isBlockedDevicePath(resolvedPath)) {
+				return {
+					error: `Cannot list device path: ${
+						inputPath ?? resolvedPath
+					}. This path would block or produce infinite output.`,
+				};
+			}
 			const stat = await fs.stat(resolvedPath);
 
 			if (!stat.isDirectory()) {
@@ -76,24 +107,42 @@ export const listDir = tool({
 				};
 			}
 
-			const entries = await fs.readdir(resolvedPath, { withFileTypes: true });
-			const visibleEntries = entries.filter((entry) => includeHidden || !entry.name.startsWith('.'));
-			const sortedEntries = visibleEntries.sort((left, right) => left.name.localeCompare(right.name));
+			const entries = await fs.readdir(resolvedPath, {withFileTypes: true});
+			const visibleEntries = entries.filter(
+				entry => includeHidden || !entry.name.startsWith('.'),
+			);
+			const sortedEntries = visibleEntries.sort((left, right) =>
+				left.name.localeCompare(right.name),
+			);
 			const selectedEntries = sortedEntries.slice(0, limit);
 
 			const results = await Promise.all(
 				selectedEntries.map(async (entry): Promise<DirectoryEntryResult> => {
 					const absoluteEntryPath = path.join(resolvedPath, entry.name);
-					const entryStat = await fs.lstat(absoluteEntryPath);
-					const type = getEntryType(entryStat);
 
-					return {
-						name: entry.name,
-						path: toDisplayPath(absoluteEntryPath),
-						type,
-						size: type === 'file' ? entryStat.size : null,
-						children: type === 'directory' ? await countChildren(absoluteEntryPath) : null,
-					};
+					try {
+						const entryStat = await fs.lstat(absoluteEntryPath);
+						const type = getEntryType(entryStat);
+
+						return {
+							name: entry.name,
+							path: toDisplayPath(absoluteEntryPath),
+							type,
+							size: type === 'file' ? entryStat.size : null,
+							children:
+								type === 'directory'
+									? await countChildren(absoluteEntryPath)
+									: null,
+						};
+					} catch {
+						return {
+							name: entry.name,
+							path: toDisplayPath(absoluteEntryPath),
+							type: 'other',
+							size: null,
+							children: null,
+						};
+					}
 				}),
 			);
 

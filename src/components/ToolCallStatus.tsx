@@ -1,13 +1,66 @@
-import React, { memo } from 'react';
-import { Box, Text } from 'ink';
+import React, {memo} from 'react';
+import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
-import type { UIMessage } from 'ai';
+import type {UIMessage} from 'ai';
 import DiffView from './DiffView.js';
 
-type ToolPart = Extract<UIMessage['parts'][number], { toolCallId: string }>;
+type ToolPart = Extract<UIMessage['parts'][number], {toolCallId: string}>;
 
 interface ToolCallStatusProps {
 	toolPart: ToolPart;
+}
+
+function deepEqual(left: unknown, right: unknown): boolean {
+	if (Object.is(left, right)) {
+		return true;
+	}
+
+	if (typeof left !== typeof right) {
+		return false;
+	}
+
+	if (left == null || right == null) {
+		return false;
+	}
+
+	if (Array.isArray(left) && Array.isArray(right)) {
+		if (left.length !== right.length) {
+			return false;
+		}
+
+		for (let index = 0; index < left.length; index += 1) {
+			if (!deepEqual(left[index], right[index])) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	if (typeof left === 'object' && typeof right === 'object') {
+		const leftRecord = left as Record<string, unknown>;
+		const rightRecord = right as Record<string, unknown>;
+		const leftKeys = Object.keys(leftRecord);
+		const rightKeys = Object.keys(rightRecord);
+
+		if (leftKeys.length !== rightKeys.length) {
+			return false;
+		}
+
+		for (const key of leftKeys) {
+			if (!Object.hasOwn(rightRecord, key)) {
+				return false;
+			}
+
+			if (!deepEqual(leftRecord[key], rightRecord[key])) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	return false;
 }
 
 const TOOL_ICONS: Record<string, string> = {
@@ -38,7 +91,9 @@ function formatArgs(toolName: string, args: Record<string, any>): string {
 		case 'grepSearch':
 			return `"${args['pattern'] ?? ''}" in ${args['searchPath'] ?? '.'}`;
 		case 'globSearch':
-			return `"${args['pattern'] ?? ''}" in ${args['path'] ?? args['searchPath'] ?? '.'}`;
+			return `"${args['pattern'] ?? ''}" in ${
+				args['path'] ?? args['searchPath'] ?? '.'
+			}`;
 		case 'listDir':
 			return args['path'] ?? '.';
 		case 'toolSearch':
@@ -69,7 +124,10 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 		case 'askUserQuestion':
 			return (
 				<Text dimColor>
-					Selected {Array.isArray(result.selectedLabels) ? result.selectedLabels.join(', ') : 'response'}
+					Selected{' '}
+					{Array.isArray(result.selectedLabels)
+						? result.selectedLabels.join(', ')
+						: 'response'}
 				</Text>
 			);
 		case 'exitPlanMode':
@@ -86,25 +144,33 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 							todo.status === 'completed'
 								? '✓'
 								: todo.status === 'in_progress'
-									? '▶'
-									: '○';
-						const priorityColor =
+								? '▶'
+								: '○';
+						const basePriorityColor =
 							todo.priority === 'high'
 								? 'red'
 								: todo.priority === 'medium'
-									? 'yellow'
-									: 'dimColor';
-						const statusColor =
+								? 'yellow'
+								: 'gray';
+						const isDimPriority =
+							todo.priority !== 'high' && todo.priority !== 'medium';
+						const baseStatusColor =
 							todo.status === 'completed'
 								? 'green'
 								: todo.status === 'in_progress'
-									? 'cyan'
-									: 'dimColor';
+								? 'cyan'
+								: 'gray';
+						const isDimStatus =
+							todo.status !== 'completed' && todo.status !== 'in_progress';
 						return (
 							<Box key={todo.id} marginLeft={2}>
-								<Text color={statusColor}>{statusIcon}</Text>
+								<Text color={baseStatusColor} dimColor={isDimStatus}>
+									{statusIcon}
+								</Text>
 								<Text> </Text>
-								<Text color={priorityColor}>[{todo.priority}]</Text>
+								<Text color={basePriorityColor} dimColor={isDimPriority}>
+									[{todo.priority}]
+								</Text>
 								<Text> {todo.content}</Text>
 							</Box>
 						);
@@ -120,7 +186,8 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 		case 'writeFile':
 			return (
 				<Text dimColor>
-					{result.action === 'created' ? 'Created' : 'Wrote'} {result.filePath} ({result.lines} lines)
+					{result.action === 'created' ? 'Created' : 'Wrote'} {result.filePath}{' '}
+					({result.lines} lines)
 				</Text>
 			);
 		case 'readFile':
@@ -167,18 +234,25 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 						{result.matchCount} match{result.matchCount === 1 ? '' : 'es'}
 						{result.truncated ? ' (truncated)' : ''}
 					</Text>
-					{result.matches && <Text>{String(result.matches).slice(0, 500)}</Text>}
+					{result.matches && (
+						<Text>{String(result.matches).slice(0, 500)}</Text>
+					)}
 				</Box>
 			);
 		case 'globSearch':
 			return (
 				<Box flexDirection="column">
 					<Text dimColor>
-						{(result.numFiles ?? result.resultCount ?? 0)} result{(result.numFiles ?? result.resultCount ?? 0) === 1 ? '' : 's'}
+						{result.numFiles ?? result.resultCount ?? 0} result
+						{(result.numFiles ?? result.resultCount ?? 0) === 1 ? '' : 's'}
 						{result.truncated ? ' (truncated)' : ''}
 					</Text>
 					{(result.filenames ?? result.results) && (
-						<Text>{((result.filenames ?? result.results) as string[]).slice(0, 10).join('\n')}</Text>
+						<Text>
+							{((result.filenames ?? result.results) as string[])
+								.slice(0, 10)
+								.join('\n')}
+						</Text>
 					)}
 				</Box>
 			);
@@ -190,7 +264,12 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 						{result.truncated ? ' (truncated)' : ''}
 					</Text>
 					{Array.isArray(result.entries) ? (
-						<Text>{result.entries.slice(0, 10).map((entry: any) => `${entry.type} ${entry.path}`).join('\n')}</Text>
+						<Text>
+							{result.entries
+								.slice(0, 10)
+								.map((entry: any) => `${entry.type} ${entry.path}`)
+								.join('\n')}
+						</Text>
 					) : null}
 				</Box>
 			);
@@ -199,16 +278,29 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 				<Box flexDirection="column">
 					<Text dimColor>{result.count ?? 0} matching tool(s)</Text>
 					{Array.isArray(result.results) ? (
-						<Text>{result.results.slice(0, 10).map((entry: any) => `${entry.name} — ${entry.description}`).join('\n')}</Text>
+						<Text>
+							{result.results
+								.slice(0, 10)
+								.map((entry: any) => `${entry.name} — ${entry.description}`)
+								.join('\n')}
+						</Text>
 					) : null}
 				</Box>
 			);
 		case 'webSearch':
 			return (
 				<Box flexDirection="column">
-					<Text dimColor>{Array.isArray(result.results) ? result.results.length : 0} web result(s)</Text>
+					<Text dimColor>
+						{Array.isArray(result.results) ? result.results.length : 0} web
+						result(s)
+					</Text>
 					{Array.isArray(result.results) ? (
-						<Text>{result.results.slice(0, 5).map((entry: any) => entry.title ?? entry.url ?? 'Untitled').join('\n')}</Text>
+						<Text>
+							{result.results
+								.slice(0, 5)
+								.map((entry: any) => entry.title ?? entry.url ?? 'Untitled')
+								.join('\n')}
+						</Text>
 					) : null}
 				</Box>
 			);
@@ -217,12 +309,17 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 	}
 }
 
-function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
-	const toolName = toolPart.type === 'dynamic-tool' ? toolPart.toolName : toolPart.type.slice(5);
+function ToolCallStatus({toolPart}: ToolCallStatusProps) {
+	const toolName =
+		toolPart.type === 'dynamic-tool'
+			? toolPart.toolName
+			: toolPart.type.slice(5);
 	const icon = TOOL_ICONS[toolName] ?? '🔨';
 	const args = (toolPart.input ?? {}) as Record<string, any>;
 	const argsStr = formatArgs(toolName, args);
-	const isRunning = toolPart.state === 'input-streaming' || toolPart.state === 'input-available';
+	const isRunning =
+		toolPart.state === 'input-streaming' ||
+		toolPart.state === 'input-available';
 	const isAwaitingApproval = toolPart.state === 'approval-requested';
 	const isApprovalResponded = toolPart.state === 'approval-responded';
 	const isDenied = toolPart.state === 'output-denied';
@@ -248,8 +345,7 @@ function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
 					<Text color="red">✗ </Text>
 				)}
 				<Text>
-					{icon}{' '}
-					<Text bold>{toolName}</Text>
+					{icon} <Text bold>{toolName}</Text>
 					{argsStr ? <Text dimColor> {argsStr}</Text> : null}
 				</Text>
 			</Box>
@@ -261,18 +357,24 @@ function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
 			{isApprovalResponded && toolPart.approval?.approved != null && (
 				<Box marginLeft={2}>
 					<Text dimColor>
-						{toolPart.approval.approved ? 'Approval received' : 'Approval denied'}
+						{toolPart.approval.approved
+							? 'Approval received'
+							: 'Approval denied'}
 					</Text>
 				</Box>
 			)}
-			{isDone && toolPart.state === 'output-available' && toolPart.output != null && (
-				<Box marginLeft={2} flexDirection="column">
-					{formatResult(toolName, toolPart.output as any)}
-				</Box>
-			)}
+			{isDone &&
+				toolPart.state === 'output-available' &&
+				toolPart.output != null && (
+					<Box marginLeft={2} flexDirection="column">
+						{formatResult(toolName, toolPart.output as any)}
+					</Box>
+				)}
 			{isDenied && toolPart.state === 'output-denied' && (
 				<Box marginLeft={2}>
-					<Text color="yellow">{toolPart.approval?.reason ?? 'Tool execution denied.'}</Text>
+					<Text color="yellow">
+						{toolPart.approval?.reason ?? 'Tool execution denied.'}
+					</Text>
 				</Box>
 			)}
 			{isError && toolPart.state === 'output-error' && toolPart.errorText && (
@@ -286,12 +388,40 @@ function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
 
 // Memoize to prevent re-renders when parent updates but toolPart hasn't changed
 export default memo(ToolCallStatus, (prevProps, nextProps) => {
-	// Only re-render if state or output changes
-	return (
-		prevProps.toolPart.state === nextProps.toolPart.state &&
-		prevProps.toolPart.toolCallId === nextProps.toolPart.toolCallId &&
-		// For output-available state, also check if output changed
-		(prevProps.toolPart.state !== 'output-available' ||
-			JSON.stringify(prevProps.toolPart.output) === JSON.stringify(nextProps.toolPart.output))
-	);
+	const prevPart = prevProps.toolPart;
+	const nextPart = nextProps.toolPart;
+
+	if (prevPart.toolCallId !== nextPart.toolCallId) {
+		return false;
+	}
+
+	if (prevPart.type !== nextPart.type || prevPart.state !== nextPart.state) {
+		return false;
+	}
+
+	if (!deepEqual(prevPart.input, nextPart.input)) {
+		return false;
+	}
+
+	switch (nextPart.state) {
+		case 'input-streaming':
+			return deepEqual(prevPart.input, nextPart.input);
+		case 'input-available':
+			return deepEqual(prevPart.input, nextPart.input);
+		case 'approval-requested':
+			return deepEqual(prevPart.approval, nextPart.approval);
+		case 'approval-responded':
+			return deepEqual(prevPart.approval, nextPart.approval);
+		case 'output-error':
+			return prevPart.errorText === nextPart.errorText;
+		case 'output-denied':
+			return (
+				prevPart.errorText === nextPart.errorText &&
+				deepEqual(prevPart.approval, nextPart.approval)
+			);
+		case 'output-available':
+			return deepEqual(prevPart.output, nextPart.output);
+		default:
+			return deepEqual(prevPart as unknown, nextPart as unknown);
+	}
 });

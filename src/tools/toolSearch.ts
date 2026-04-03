@@ -1,9 +1,12 @@
-import { tool } from 'ai';
-import { z } from 'zod';
-import { allToolNames, getToolMetadata, type ToolName } from './toolMetadata.js';
+import {tool} from 'ai';
+import {z} from 'zod';
+import {allToolNames, getToolMetadata, type ToolName} from './toolMetadata.js';
 
 function tokenize(value: string): string[] {
-	return value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+	return value
+		.toLowerCase()
+		.split(/[^a-z0-9]+/)
+		.filter(Boolean);
 }
 
 function scoreTool(name: ToolName, query: string): number {
@@ -17,19 +20,26 @@ function scoreTool(name: ToolName, query: string): number {
 		return 1;
 	}
 
-	const haystack = `${name} ${metadata.description}`.toLowerCase();
+	const metadataFacets = [
+		metadata.description,
+		String(metadata.interactive === true),
+		String(metadata.readOnly === true),
+		metadata.allowedModes.join(' '),
+	];
+	const haystack = `${name} ${metadataFacets.join(' ')}`.toLowerCase();
 	if (haystack.includes(lowerQuery)) {
 		return 100;
 	}
 
 	const queryTokens = tokenize(lowerQuery);
 	const haystackTokens = new Set(tokenize(haystack));
+	const haystackArray = Array.from(haystackTokens);
 	let score = 0;
 
 	for (const token of queryTokens) {
 		if (haystackTokens.has(token)) {
 			score += 10;
-		} else if (Array.from(haystackTokens).some((candidate) => candidate.startsWith(token))) {
+		} else if (haystackArray.some(candidate => candidate.startsWith(token))) {
 			score += 3;
 		}
 	}
@@ -44,7 +54,9 @@ export const toolSearch = tool({
 		query: z
 			.string()
 			.optional()
-			.describe('The search query to match against tool names and descriptions.'),
+			.describe(
+				'The search query to match against tool names and descriptions.',
+			),
 		includeInteractiveOnly: z
 			.boolean()
 			.optional()
@@ -54,9 +66,13 @@ export const toolSearch = tool({
 			.optional()
 			.describe('If true, only return tools that are read-only.'),
 	}),
-	execute: async ({ query = '', includeInteractiveOnly = false, includeReadOnlyOnly = false }) => {
+	execute: async ({
+		query = '',
+		includeInteractiveOnly = false,
+		includeReadOnlyOnly = false,
+	}) => {
 		const results = allToolNames
-			.map((name) => {
+			.map(name => {
 				const metadata = getToolMetadata(name);
 				if (metadata == null) {
 					return null;
@@ -80,8 +96,11 @@ export const toolSearch = tool({
 				};
 			})
 			.filter((value): value is NonNullable<typeof value> => value != null)
-			.filter((value) => query.trim().length === 0 || value.score > 0)
-			.sort((left, right) => right.score - left.score || left.name.localeCompare(right.name));
+			.filter(value => query.trim().length === 0 || value.score > 0)
+			.sort(
+				(left, right) =>
+					right.score - left.score || left.name.localeCompare(right.name),
+			);
 
 		return {
 			query,

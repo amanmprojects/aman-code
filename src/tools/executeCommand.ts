@@ -1,6 +1,6 @@
-import { tool } from 'ai';
-import { z } from 'zod';
-import { execa, type ExecaError } from 'execa';
+import {tool} from 'ai';
+import {z} from 'zod';
+import {execa, type ExecaError} from 'execa';
 import treeKill from 'tree-kill';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -10,7 +10,7 @@ const DANGEROUS_PATTERNS = [
 	/rm\s+(-[a-zA-Z]*)?f[a-zA-Z]*r?\s+\/(?!\S)/,
 	/mkfs/,
 	/dd\s+if=/,
-	/:\(\)\{\s*:\|:&\s*\};/,  // Fork bomb pattern
+	/:\(\)\{\s*:\|:&\s*\};/, // Fork bomb pattern
 	/>\s*\/dev\/sd[a-z]/,
 	/chmod\s+(-R\s+)?777\s+\//,
 	/chown\s+(-R\s+)?.*\s+\//,
@@ -40,11 +40,11 @@ const READ_ONLY_COMMAND_PATTERNS = [
 const SEARCH_COMMAND_PATTERNS = [/^\s*(grep|rg|find|fd)\b/i];
 
 function classifyCommand(command: string): CommandClassification {
-	if (SEARCH_COMMAND_PATTERNS.some((pattern) => pattern.test(command))) {
+	if (SEARCH_COMMAND_PATTERNS.some(pattern => pattern.test(command))) {
 		return 'search';
 	}
 
-	if (READ_ONLY_COMMAND_PATTERNS.some((pattern) => pattern.test(command))) {
+	if (READ_ONLY_COMMAND_PATTERNS.some(pattern => pattern.test(command))) {
 		return 'read';
 	}
 
@@ -52,7 +52,9 @@ function classifyCommand(command: string): CommandClassification {
 		return 'mutating';
 	}
 
-	return /\b(mv|cp|sed|perl|python|node|npm|pnpm|bun|git|touch|mkdir|chmod|chown)\b/i.test(command)
+	return /\b(mv|cp|sed|perl|python|node|npm|pnpm|bun|git|touch|mkdir|chmod|chown)\b/i.test(
+		command,
+	)
 		? 'mutating'
 		: 'unknown';
 }
@@ -61,7 +63,7 @@ function appendBoundedText(
 	current: string,
 	chunk: string,
 	limit: number,
-): { text: string; truncated: boolean } {
+): {text: string; truncated: boolean} {
 	if (current.length >= limit) {
 		return {
 			text: current,
@@ -115,20 +117,35 @@ export const executeCommand = tool({
 			.positive()
 			.max(30 * 60_000) // Max 30 minutes
 			.optional()
-			.describe('Maximum runtime before the command is terminated. Defaults to 10 minutes (600000ms).'),
+			.describe(
+				'Maximum runtime before the command is terminated. Defaults to 10 minutes (600000ms).',
+			),
 		maxOutputChars: z
 			.number()
 			.int()
 			.positive()
 			.max(200_000)
 			.optional()
-			.describe('Maximum number of stdout or stderr characters to retain. Defaults to 12000.'),
+			.describe(
+				'Maximum number of stdout or stderr characters to retain. Defaults to 12000.',
+			),
 		background: z
 			.boolean()
 			.optional()
-			.describe('If true, start the command in the background and return immediately.'),
+			.describe(
+				'If true, start the command in the background and return immediately.',
+			),
 	}),
-	execute: async ({command, cwd, timeoutMs = DEFAULT_TIMEOUT_MS, maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS, background = false}, options) => {
+	execute: async (
+		{
+			command,
+			cwd,
+			timeoutMs = DEFAULT_TIMEOUT_MS,
+			maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
+			background = false,
+		},
+		options,
+	) => {
 		const resolvedCwd = cwd ? path.resolve(cwd) : process.cwd();
 		const classification = classifyCommand(command);
 
@@ -184,6 +201,7 @@ export const executeCommand = tool({
 			let stdoutTruncated = false;
 			let stderrTruncated = false;
 			let timedOut = false;
+			let aborted = false;
 			let exitCode: number | null = null;
 
 			// Use execa with streaming for bounded output
@@ -192,25 +210,31 @@ export const executeCommand = tool({
 				buffer: false, // Don't buffer, we'll handle it
 			});
 
-			// Set up abort handler for proper cleanup
-			const abortHandler = () => {
+			const timeoutHandler = () => {
 				timedOut = true;
 				if (subprocess.pid) {
 					treeKill(subprocess.pid, 'SIGTERM');
 				}
 			};
 
+			const abortHandler = () => {
+				aborted = true;
+				if (subprocess.pid) {
+					treeKill(subprocess.pid, 'SIGTERM');
+				}
+			};
+
 			// Handle timeout manually for better control
-			const timeoutId = setTimeout(() => {
-				abortHandler();
-			}, timeoutMs);
+			const timeoutId = setTimeout(timeoutHandler, timeoutMs);
 
 			// Unref the timeout so it doesn't block the event loop
 			timeoutId.unref();
 
 			// Handle abort signal
 			if (options.abortSignal) {
-				options.abortSignal.addEventListener('abort', abortHandler, { once: true });
+				options.abortSignal.addEventListener('abort', abortHandler, {
+					once: true,
+				});
 			}
 
 			// Stream stdout with bounds
@@ -229,38 +253,55 @@ export const executeCommand = tool({
 				stderrTruncated ||= result.truncated;
 			});
 
-			// Wait for process to complete
-			const result = await subprocess;
-
-			// Clear timeout since process completed
-			clearTimeout(timeoutId);
-
-			// Remove abort listener
-			if (options.abortSignal) {
-				options.abortSignal.removeEventListener('abort', abortHandler);
+			let result;
+			try {
+				// Wait for process to complete
+				result = await subprocess;
+			} finally {
+				clearTimeout(timeoutId);
+				if (options.abortSignal) {
+					options.abortSignal.removeEventListener('abort', abortHandler);
+				}
 			}
 
 			exitCode = result.exitCode ?? (result.timedOut ? SIGTERM : 1);
 
 			// If we didn't capture output through streaming (e.g., small output), use result
 			if (!stdout && result.stdout) {
-				const bounded = appendBoundedText('', String(result.stdout), maxOutputChars);
+				const bounded = appendBoundedText(
+					'',
+					String(result.stdout),
+					maxOutputChars,
+				);
 				stdout = bounded.text;
 				stdoutTruncated = bounded.truncated;
 			}
 			if (!stderr && result.stderr) {
-				const bounded = appendBoundedText('', String(result.stderr), maxOutputChars);
+				const bounded = appendBoundedText(
+					'',
+					String(result.stderr),
+					maxOutputChars,
+				);
 				stderr = bounded.text;
 				stderrTruncated = bounded.truncated;
 			}
 
 			// Prepend timeout message if timed out
 			if (result.timedOut || timedOut) {
-				stderr = `Command timed out after ${formatDuration(timeoutMs)}\n${stderr}`;
+				stderr = `Command timed out after ${formatDuration(
+					timeoutMs,
+				)}\n${stderr}`;
+			}
+
+			if (aborted) {
+				stderr = `Command cancelled by user\n${stderr}`;
 			}
 
 			// Handle kill signals
-			if (exitCode === SIGKILL || exitCode === SIGTERM || result.signal) {
+			if (
+				!aborted &&
+				(exitCode === SIGKILL || exitCode === SIGTERM || result.signal)
+			) {
 				timedOut = true;
 			}
 
@@ -272,13 +313,16 @@ export const executeCommand = tool({
 				durationMs: Date.now() - startedAt,
 				timeoutMs,
 				timedOut,
+				aborted,
 				stdout: stdout.trimEnd(),
 				stderr: stderr.trimEnd(),
 				stdoutTruncated,
 				stderrTruncated,
 				exitCode,
 				signal: result.signal,
-				...(result.failed && result.shortMessage ? { error: result.shortMessage } : {}),
+				...(result.failed && result.shortMessage
+					? {error: result.shortMessage}
+					: {}),
 			};
 		} catch (error: unknown) {
 			const execaError = error as ExecaError;
@@ -289,8 +333,11 @@ export const executeCommand = tool({
 				background: false,
 				stdout: '',
 				stderr: '',
-				exitCode: execaError?.exitCode ?? (execaError?.code === 'ENOENT' ? 127 : 1),
-				error: execaError?.shortMessage || (error instanceof Error ? error.message : String(error)),
+				exitCode:
+					execaError?.exitCode ?? (execaError?.code === 'ENOENT' ? 127 : 1),
+				error:
+					execaError?.shortMessage ||
+					(error instanceof Error ? error.message : String(error)),
 			};
 		}
 	},

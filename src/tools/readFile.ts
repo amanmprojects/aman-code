@@ -1,59 +1,54 @@
-import { tool } from 'ai';
-import { z } from 'zod';
+import {tool} from 'ai';
+import {z} from 'zod';
 import * as fs from 'node:fs/promises';
-import { createReadStream, type Stats } from 'node:fs';
+import {createReadStream, type Stats} from 'node:fs';
 import * as path from 'node:path';
+import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
 
 // Maximum file size for full reads (256KB)
 const MAX_FILE_SIZE_BYTES = 256 * 1024;
 
-// Device files that would hang the process: infinite output or blocking input.
-// Checked by path only (no I/O). Safe devices like /dev/null are intentionally omitted.
-const BLOCKED_DEVICE_PATHS = new Set([
-	// Infinite output — never reach EOF
-	'/dev/zero',
-	'/dev/random',
-	'/dev/urandom',
-	'/dev/full',
-	// Blocks waiting for input
-	'/dev/stdin',
-	'/dev/tty',
-	'/dev/console',
-	// Nonsensical to read
-	'/dev/stdout',
-	'/dev/stderr',
-	// fd aliases for stdin/stdout/stderr
-	'/dev/fd/0',
-	'/dev/fd/1',
-	'/dev/fd/2',
-]);
-
 // Common binary extensions to reject
 const BINARY_EXTENSIONS = new Set([
-	'exe', 'dll', 'so', 'dylib', 'bin',
-	'zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar',
-	'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico',
-	'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-	'mp3', 'mp4', 'avi', 'mov', 'wav', 'flac', 'ogg',
-	'wasm', 'class', 'jar', 'o', 'a',
+	'exe',
+	'dll',
+	'so',
+	'dylib',
+	'bin',
+	'zip',
+	'tar',
+	'gz',
+	'bz2',
+	'xz',
+	'7z',
+	'rar',
+	'jpg',
+	'jpeg',
+	'png',
+	'gif',
+	'webp',
+	'bmp',
+	'ico',
+	'pdf',
+	'doc',
+	'docx',
+	'xls',
+	'xlsx',
+	'ppt',
+	'pptx',
+	'mp3',
+	'mp4',
+	'avi',
+	'mov',
+	'wav',
+	'flac',
+	'ogg',
+	'wasm',
+	'class',
+	'jar',
+	'o',
+	'a',
 ]);
-
-function isBlockedDevicePath(filePath: string): boolean {
-	if (BLOCKED_DEVICE_PATHS.has(filePath)) return true;
-	// /proc/self/fd/0-2 and /proc/<pid>/fd/0-2 are Linux aliases for stdio
-	if (
-		filePath.startsWith('/proc/') &&
-		(filePath.endsWith('/fd/0') ||
-			filePath.endsWith('/fd/1') ||
-			filePath.endsWith('/fd/2'))
-	)
-		return true;
-	return false;
-}
-
-function isUNCPath(filePath: string): boolean {
-	return filePath.startsWith('\\\\') || filePath.startsWith('//');
-}
 
 function hasBinaryExtension(filePath: string): boolean {
 	const ext = path.extname(filePath).toLowerCase().slice(1);
@@ -67,7 +62,7 @@ async function isBinaryFile(filePath: string): Promise<boolean> {
 	// Read first 8KB to check for null bytes (common in binary files)
 	try {
 		const buffer = Buffer.alloc(8192);
-		const stream = createReadStream(filePath, { start: 0, end: 8191 });
+		const stream = createReadStream(filePath, {start: 0, end: 8191});
 		let bytesRead = 0;
 
 		for await (const chunk of stream) {
@@ -101,13 +96,11 @@ async function findSimilarFiles(
 		const dirStat = await fs.stat(dir).catch(() => null);
 		if (!dirStat?.isDirectory()) return null;
 
-		const entries = await fs.readdir(dir, { withFileTypes: true });
-		const files = entries
-			.filter((e) => e.isFile())
-			.map((e) => e.name);
+		const entries = await fs.readdir(dir, {withFileTypes: true});
+		const files = entries.filter(e => e.isFile()).map(e => e.name);
 
 		// Find files with similar names
-		const similar = files.filter((f) => {
+		const similar = files.filter(f => {
 			const lower = f.toLowerCase();
 			// Same name different extension, or contains target name, or vice versa
 			return (
@@ -137,10 +130,7 @@ async function findSimilarFiles(
 	return null;
 }
 
-function suggestPathUnderCwd(
-	targetPath: string,
-	cwd: string,
-): string | null {
+function suggestPathUnderCwd(targetPath: string, cwd: string): string | null {
 	// If the path doesn't exist, try to suggest a path relative to cwd
 	const relativePath = path.relative(cwd, targetPath);
 	if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
@@ -153,7 +143,9 @@ export const readFile = tool({
 	description:
 		'Read the contents of a file at the specified path. Returns the file contents with line numbers. Use this to understand existing code before making changes.',
 	inputSchema: z.object({
-		filePath: z.string().describe('Absolute or relative path to the file to read'),
+		filePath: z
+			.string()
+			.describe('Absolute or relative path to the file to read'),
 		offset: z
 			.number()
 			.optional()
@@ -163,7 +155,7 @@ export const readFile = tool({
 			.optional()
 			.describe('Number of lines to read from the offset'),
 	}),
-	execute: async ({ filePath, offset, limit }) => {
+	execute: async ({filePath, offset, limit}) => {
 		const cwd = process.cwd();
 
 		try {
@@ -205,25 +197,37 @@ export const readFile = tool({
 						}
 					}
 
-					return { error: message };
+					return {error: message};
 				}
 				throw error;
 			}
 
 			// Check if it's a directory
 			if (stat.isDirectory()) {
-				return { error: `Path is a directory, not a file: ${resolved}` };
+				return {error: `Path is a directory, not a file: ${resolved}`};
 			}
 
 			// Check if it's a symbolic link
 			if (stat.isSymbolicLink()) {
-				return { error: `Cannot read symbolic link: ${resolved}. Resolve the link first.` };
+				return {
+					error: `Cannot read symbolic link: ${resolved}. Resolve the link first.`,
+				};
+			}
+
+			if (!stat.isFile()) {
+				return {
+					error: `Path is not a regular file: ${resolved}. Cannot read special file types.`,
+				};
 			}
 
 			// Check file size before reading
-			if (stat.size > MAX_FILE_SIZE_BYTES && limit === undefined) {
+			if (stat.size > MAX_FILE_SIZE_BYTES) {
 				return {
-					error: `File is too large (${(stat.size / 1024).toFixed(1)}KB) to read at once. Maximum size is ${MAX_FILE_SIZE_BYTES / 1024}KB. Use offset and limit to read specific portions.`,
+					error: `File is too large (${(stat.size / 1024).toFixed(
+						1,
+					)}KB) to read at once. Maximum size is ${
+						MAX_FILE_SIZE_BYTES / 1024
+					}KB. Use offset and limit to read specific portions.`,
 				};
 			}
 
@@ -247,7 +251,8 @@ export const readFile = tool({
 					totalLines: 0,
 					startLine: 1,
 					endLine: 0,
-					content: '<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>',
+					content:
+						'<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>',
 				};
 			}
 
@@ -289,19 +294,19 @@ export const readFile = tool({
 		} catch (error: any) {
 			// Handle specific error codes
 			if (error?.code === 'EACCES' || error?.code === 'EPERM') {
-				return { error: `Permission denied: ${filePath}` };
+				return {error: `Permission denied: ${filePath}`};
 			}
 			if (error?.code === 'EISDIR') {
-				return { error: `Path is a directory: ${filePath}` };
+				return {error: `Path is a directory: ${filePath}`};
 			}
 			if (error?.code === 'ENOTDIR') {
-				return { error: `Not a directory in path: ${filePath}` };
+				return {error: `Not a directory in path: ${filePath}`};
 			}
 			if (error?.code === 'ENAMETOOLONG') {
-				return { error: `File path too long: ${filePath}` };
+				return {error: `File path too long: ${filePath}`};
 			}
 
-			return { error: `Failed to read file: ${error.message}` };
+			return {error: `Failed to read file: ${error.message}`};
 		}
 	},
 });

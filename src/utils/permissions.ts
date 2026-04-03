@@ -1,5 +1,3 @@
-export type Mode = 'plan' | 'code' | 'yolo';
-
 import {
 	getAllowedToolNamesForMode,
 	getReadOnlyToolNames,
@@ -7,7 +5,12 @@ import {
 	type ToolName,
 } from '../tools/toolMetadata.js';
 
-export const MODES: Record<Mode, { label: string; color: string; description: string }> = {
+export type Mode = 'plan' | 'code' | 'yolo';
+
+export const MODES: Record<
+	Mode,
+	{label: string; color: string; description: string}
+> = {
 	plan: {
 		label: 'PLAN',
 		color: 'blue',
@@ -28,21 +31,11 @@ export const MODES: Record<Mode, { label: string; color: string; description: st
 const READ_ONLY_TOOLS = getReadOnlyToolNames();
 
 export function getAllowedToolNames(mode: Mode): Set<ToolName> {
-	switch (mode) {
-		case 'plan':
-			return getAllowedToolNamesForMode(mode);
-		case 'code':
-		case 'yolo':
-			return getAllowedToolNamesForMode(mode);
-		default:
-			return getAllowedToolNamesForMode('plan');
-	}
+	return getAllowedToolNamesForMode(mode);
 }
 
 export function isReadOnlyToolName(name: string): boolean {
 	return READ_ONLY_TOOLS.has(name as ToolName);
 }
 
-export function isInteractiveTool(name: string): boolean {
-	return isInteractiveToolName(name);
-}
+export {isInteractiveToolName as isInteractiveTool};

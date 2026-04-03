@@ -1,6 +1,6 @@
-import { tool } from 'ai';
-import { z } from 'zod';
-import { execFile } from 'node:child_process';
+import {tool} from 'ai';
+import {z} from 'zod';
+import {execFile} from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 
@@ -18,16 +18,26 @@ const VCS_DIRECTORIES_TO_EXCLUDE = [
 const DEFAULT_HEAD_LIMIT = 250;
 
 // Common directories to exclude
-const EXCLUDED_DIRECTORIES = ['node_modules', 'dist', 'build', '.next', '.cache'];
+const EXCLUDED_DIRECTORIES = [
+	'node_modules',
+	'dist',
+	'build',
+	'.next',
+	'.cache',
+];
 
 function applyHeadLimit<T>(
 	items: T[],
 	limit: number | undefined,
 	offset: number = 0,
-): { items: T[]; appliedLimit: number | undefined; wasTruncated: boolean } {
+): {items: T[]; appliedLimit: number | undefined; wasTruncated: boolean} {
 	// Explicit 0 = unlimited escape hatch
 	if (limit === 0) {
-		return { items: items.slice(offset), appliedLimit: undefined, wasTruncated: false };
+		return {
+			items: items.slice(offset),
+			appliedLimit: undefined,
+			wasTruncated: false,
+		};
 	}
 	const effectiveLimit = limit ?? DEFAULT_HEAD_LIMIT;
 	const sliced = items.slice(offset, offset + effectiveLimit);
@@ -41,7 +51,11 @@ function applyHeadLimit<T>(
 
 function toRelativePath(filePath: string): string {
 	const relativePath = path.relative(process.cwd(), filePath);
-	if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+	if (
+		!relativePath ||
+		relativePath.startsWith('..') ||
+		path.isAbsolute(relativePath)
+	) {
 		return filePath;
 	}
 	return relativePath.split(path.sep).join('/');
@@ -61,8 +75,8 @@ function formatLimitInfo(
 function execFileAsync(
 	command: string,
 	args: string[],
-	options: { cwd?: string; timeout?: number; maxBuffer?: number },
-): Promise<{ stdout: string; stderr: string }> {
+	options: {cwd?: string; timeout?: number; maxBuffer?: number},
+): Promise<{stdout: string; stderr: string}> {
 	return new Promise((resolve, reject) => {
 		execFile(
 			command,
@@ -78,7 +92,7 @@ function execFileAsync(
 				if (error && error.code !== 1) {
 					reject(error);
 				} else {
-					resolve({ stdout: stdout || '', stderr: stderr || '' });
+					resolve({stdout: stdout || '', stderr: stderr || ''});
 				}
 			},
 		);
@@ -89,7 +103,11 @@ export const grepSearch = tool({
 	description:
 		'A powerful search tool built on ripgrep. Search for a pattern (regex or fixed string) across files in a directory. Supports multiple output modes, context lines, pagination, and more.',
 	inputSchema: z.object({
-		pattern: z.string().describe('The regular expression pattern to search for in file contents'),
+		pattern: z
+			.string()
+			.describe(
+				'The regular expression pattern to search for in file contents',
+			),
 		path: z
 			.string()
 			.optional()
@@ -99,7 +117,9 @@ export const grepSearch = tool({
 		searchPath: z
 			.string()
 			.optional()
-			.describe('Deprecated alias for path. The directory or file path to search in.'),
+			.describe(
+				'Deprecated alias for path. The directory or file path to search in.',
+			),
 		glob: z
 			.string()
 			.optional()
@@ -151,7 +171,9 @@ export const grepSearch = tool({
 		caseSensitive: z
 			.boolean()
 			.optional()
-			.describe('Case sensitive search (default: true). Set to false for case-insensitive search with -i'),
+			.describe(
+				'Case sensitive search (default: true). Set to false for case-insensitive search with -i',
+			),
 		fixedStrings: z
 			.boolean()
 			.optional()
@@ -211,12 +233,16 @@ export const grepSearch = tool({
 			try {
 				const stats = await fs.stat(resolved);
 				if (!stats.isDirectory() && !stats.isFile()) {
-					return { error: `Path is not a file or directory: ${targetPath ?? resolved}` };
+					return {
+						error: `Path is not a file or directory: ${targetPath ?? resolved}`,
+					};
 				}
 			} catch (error: any) {
 				if (error?.code === 'ENOENT') {
 					return {
-						error: `Path does not exist: ${targetPath ?? resolved}. Current working directory: ${process.cwd()}.`,
+						error: `Path does not exist: ${
+							targetPath ?? resolved
+						}. Current working directory: ${process.cwd()}.`,
 					};
 				}
 				throw error;
@@ -286,14 +312,13 @@ export const grepSearch = tool({
 			// Glob patterns (from glob parameter or includes array)
 			const globPatterns: string[] = [];
 			if (glob) {
-				// Split on commas and spaces, but preserve patterns with braces
-				const rawPatterns = glob.split(/\s+/);
+				// Split only on commas so spaces inside patterns are preserved
+				const rawPatterns = glob
+					.split(',')
+					.map(value => value.trim())
+					.filter(Boolean);
 				for (const rawPattern of rawPatterns) {
-					if (rawPattern.includes('{') && rawPattern.includes('}')) {
-						globPatterns.push(rawPattern);
-					} else {
-						globPatterns.push(...rawPattern.split(',').filter(Boolean));
-					}
+					globPatterns.push(rawPattern);
 				}
 			}
 			if (includes) {
@@ -314,7 +339,7 @@ export const grepSearch = tool({
 			args.push(resolved);
 
 			// Execute ripgrep
-			const { stdout } = await execFileAsync('rg', args, {
+			const {stdout} = await execFileAsync('rg', args, {
 				timeout: 30_000,
 				maxBuffer: 10 * 1024 * 1024, // 10MB
 			});
@@ -324,13 +349,13 @@ export const grepSearch = tool({
 			// Handle different output modes
 			if (outputMode === 'content') {
 				// For content mode, apply head limit and offset, then convert paths
-				const { items: limitedLines, appliedLimit } = applyHeadLimit(
-					lines,
-					headLimit,
-					offset,
-				);
+				const {
+					items: limitedLines,
+					appliedLimit,
+					wasTruncated,
+				} = applyHeadLimit(lines, headLimit, offset);
 
-				const finalLines = limitedLines.map((line) => {
+				const finalLines = limitedLines.map(line => {
 					// Lines have format: path:line_content or path:num:content
 					// Use regex to find the colon before line number to handle Windows paths like C:\path\file:10:content
 					const match = line.match(/^(.+?):(?=\d+:)/);
@@ -339,7 +364,7 @@ export const grepSearch = tool({
 						const rest = line.substring(filePath.length);
 						return toRelativePath(filePath) + rest;
 					}
-					// Fallback: try lastIndexOf for simple cases (e.g., count mode output)
+					// Fallback for content-mode lines with a single colon-delimited boundary (path:rest)
 					const colonIndex = line.lastIndexOf(':');
 					if (colonIndex > 0) {
 						const filePath = line.substring(0, colonIndex);
@@ -349,7 +374,10 @@ export const grepSearch = tool({
 					return line;
 				});
 
-				const limitInfo = formatLimitInfo(appliedLimit, offset > 0 ? offset : undefined);
+				const limitInfo = formatLimitInfo(
+					appliedLimit,
+					offset > 0 ? offset : undefined,
+				);
 				const content = finalLines.join('\n') || 'No matches found';
 
 				return {
@@ -357,23 +385,25 @@ export const grepSearch = tool({
 					path: toRelativePath(resolved),
 					outputMode,
 					matchCount: lines.length,
+					matches: finalLines,
+					truncated: wasTruncated,
 					content,
 					numLines: finalLines.length,
-					...(appliedLimit !== undefined && { appliedLimit }),
-					...(offset > 0 && { appliedOffset: offset }),
-					...(limitInfo && { paginationInfo: limitInfo }),
+					...(appliedLimit !== undefined && {appliedLimit}),
+					...(offset > 0 && {appliedOffset: offset}),
+					...(limitInfo && {paginationInfo: limitInfo}),
 				};
 			}
 
 			if (outputMode === 'count') {
 				// For count mode, apply head limit and offset, then convert paths
-				const { items: limitedLines, appliedLimit } = applyHeadLimit(
-					lines,
-					headLimit,
-					offset,
-				);
+				const {
+					items: limitedLines,
+					appliedLimit,
+					wasTruncated,
+				} = applyHeadLimit(lines, headLimit, offset);
 
-				const finalLines = limitedLines.map((line) => {
+				const finalLines = limitedLines.map(line => {
 					// Lines have format: /absolute/path:count
 					const colonIndex = line.lastIndexOf(':');
 					if (colonIndex > 0) {
@@ -399,7 +429,10 @@ export const grepSearch = tool({
 					}
 				}
 
-				const limitInfo = formatLimitInfo(appliedLimit, offset > 0 ? offset : undefined);
+				const limitInfo = formatLimitInfo(
+					appliedLimit,
+					offset > 0 ? offset : undefined,
+				);
 				const content = finalLines.join('\n') || 'No matches found';
 
 				return {
@@ -408,25 +441,28 @@ export const grepSearch = tool({
 					outputMode,
 					numFiles: fileCount,
 					numMatches: totalMatches,
+					matchCount: totalMatches,
+					matches: [],
+					truncated: wasTruncated,
 					content,
-					...(appliedLimit !== undefined && { appliedLimit }),
-					...(offset > 0 && { appliedOffset: offset }),
-					...(limitInfo && { paginationInfo: limitInfo }),
+					...(appliedLimit !== undefined && {appliedLimit}),
+					...(offset > 0 && {appliedOffset: offset}),
+					...(limitInfo && {paginationInfo: limitInfo}),
 				};
 			}
 
 			// files_with_matches mode (default)
 			// Sort by modification time, apply head limit, convert to relative paths
 			const stats = await Promise.allSettled(
-				lines.map((filePath) => fs.stat(filePath)),
+				lines.map(filePath => fs.stat(filePath)),
 			);
 
 			const sortedMatches = lines
 				.map((filePath, i) => {
 					const result = stats[i]!;
 					const mtimeMs =
-						result.status === 'fulfilled' ? (result.value.mtimeMs ?? 0) : 0;
-					return { filePath, mtimeMs };
+						result.status === 'fulfilled' ? result.value.mtimeMs ?? 0 : 0;
+					return {filePath, mtimeMs};
 				})
 				.sort((a, b) => {
 					// In tests, sort by filename for deterministic results
@@ -439,16 +475,19 @@ export const grepSearch = tool({
 					}
 					return timeComparison;
 				})
-				.map((item) => item.filePath);
+				.map(item => item.filePath);
 
-			const { items: limitedMatches, appliedLimit } = applyHeadLimit(
+			const {items: limitedMatches, appliedLimit} = applyHeadLimit(
 				sortedMatches,
 				headLimit,
 				offset,
 			);
 
 			const relativeMatches = limitedMatches.map(toRelativePath);
-			const limitInfo = formatLimitInfo(appliedLimit, offset > 0 ? offset : undefined);
+			const limitInfo = formatLimitInfo(
+				appliedLimit,
+				offset > 0 ? offset : undefined,
+			);
 
 			if (relativeMatches.length === 0) {
 				return {
@@ -457,36 +496,37 @@ export const grepSearch = tool({
 					outputMode,
 					numFiles: 0,
 					filenames: [],
+					matchCount: 0,
+					matches: [],
+					truncated: false,
 					message: 'No files found',
 				};
 			}
+
+			const isTruncated =
+				offset + relativeMatches.length < sortedMatches.length;
 
 			return {
 				pattern,
 				path: toRelativePath(resolved),
 				outputMode,
 				numFiles: relativeMatches.length,
+				matchCount: relativeMatches.length,
+				matches: relativeMatches,
+				truncated: isTruncated,
 				filenames: relativeMatches,
-				...(appliedLimit !== undefined && { appliedLimit }),
-				...(offset > 0 && { appliedOffset: offset }),
-				...(limitInfo && { paginationInfo: limitInfo }),
+				...(appliedLimit !== undefined && {appliedLimit}),
+				...(offset > 0 && {appliedOffset: offset}),
+				...(limitInfo && {paginationInfo: limitInfo}),
 			};
 		} catch (error: any) {
-			// ripgrep returns exit code 1 when no matches found - not an error
-			if (error.code === 1 && error.stdout === '') {
-				return {
-					pattern,
-					path: toRelativePath(inputPath ? path.resolve(inputPath) : process.cwd()),
-					outputMode,
-					numFiles: 0,
-					filenames: [],
-					matchCount: 0,
-					message: outputMode === 'content' ? 'No matches found' : 'No files found',
-				};
-			}
-
 			// Check if ripgrep is not installed
-			if (error.code === 'ENOENT' && error.message?.includes('rg')) {
+			const missingPath = typeof error.path === 'string' ? error.path : '';
+			const missingRg =
+				missingPath === 'rg' ||
+				missingPath.endsWith(`${path.sep}rg`) ||
+				(typeof error.message === 'string' && error.message.includes('rg'));
+			if (error.code === 'ENOENT' && missingRg) {
 				return {
 					error:
 						'ripgrep (rg) is not installed. Please install ripgrep to use the grepSearch tool. See: https://github.com/BurntSushi/ripgrep#installation',

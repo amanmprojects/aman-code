@@ -1,16 +1,22 @@
-import { tool } from 'ai';
-import { z } from 'zod';
+import {tool} from 'ai';
+import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { createPatch } from 'diff';
+import {createPatch} from 'diff';
+import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
 
 function detectLineEnding(content: string): '\n' | '\r\n' {
 	return content.includes('\r\n') ? '\r\n' : '\n';
 }
 
-function normalizeLineEndings(content: string, lineEnding: '\n' | '\r\n'): string {
+function normalizeLineEndings(
+	content: string,
+	lineEnding: '\n' | '\r\n',
+): string {
 	const normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-	return lineEnding === '\r\n' ? normalized.replaceAll('\n', '\r\n') : normalized;
+	return lineEnding === '\r\n'
+		? normalized.replaceAll('\n', '\r\n')
+		: normalized;
 }
 
 function countOccurrences(content: string, search: string): number {
@@ -36,26 +42,43 @@ export const editFile = tool({
 	description:
 		'Make a targeted edit to a file by replacing an exact string match with new content. The oldString must match exactly, including whitespace and indentation. For creating new files, use writeFile instead.',
 	inputSchema: z.object({
-		filePath: z.string().describe('Absolute or relative path to the file to edit'),
+		filePath: z
+			.string()
+			.describe('Absolute or relative path to the file to edit'),
 		oldString: z
 			.string()
-			.describe('The exact text to find and replace. Must be unique in the file.'),
+			.describe(
+				'The exact text to find and replace. Must be unique in the file.',
+			),
 		newString: z
 			.string()
 			.describe('The replacement text. Must be different from oldString.'),
 		replaceAll: z
 			.boolean()
 			.optional()
-			.describe('If true, replace all occurrences of oldString. Default: false.'),
+			.describe(
+				'If true, replace all occurrences of oldString. Default: false.',
+			),
 	}),
 	execute: async ({filePath, oldString, newString, replaceAll = false}) => {
 		try {
 			const resolved = path.resolve(filePath);
 
+			if (isUNCPath(resolved)) {
+				return {
+					error: `Cannot edit UNC path: ${filePath}. Use a local path instead.`,
+				};
+			}
+
+			if (isBlockedDevicePath(resolved)) {
+				return {
+					error: `Cannot edit device file: ${filePath}. This file would block or produce infinite output.`,
+				};
+			}
+
 			if (path.extname(resolved).toLowerCase() === '.ipynb') {
 				return {
-					error:
-						`Notebook edits are not supported by editFile: ${resolved}. Use a dedicated notebook tool instead.`,
+					error: `Notebook edits are not supported by editFile: ${resolved}. Use a dedicated notebook tool instead.`,
 				};
 			}
 
@@ -77,12 +100,15 @@ export const editFile = tool({
 			const original = await fs.readFile(resolved, 'utf-8');
 
 			if (oldString === newString) {
-				return {error: 'oldString and newString are identical. No edit needed.'};
+				return {
+					error: 'oldString and newString are identical. No edit needed.',
+				};
 			}
 
 			if (oldString.length === 0) {
 				return {
-					error: 'oldString must not be empty. Provide the exact text to replace.',
+					error:
+						'oldString must not be empty. Provide the exact text to replace.',
 				};
 			}
 
@@ -96,10 +122,10 @@ export const editFile = tool({
 			const occurrenceCount = countOccurrences(original, oldString);
 
 			if (!replaceAll && occurrenceCount > 1) {
-					return {
-						error:
-							'oldString appears multiple times in the file. Provide more context to make it unique, or set replaceAll: true.',
-					};
+				return {
+					error:
+						'oldString appears multiple times in the file. Provide more context to make it unique, or set replaceAll: true.',
+				};
 			}
 
 			const lineEnding = detectLineEnding(original);
