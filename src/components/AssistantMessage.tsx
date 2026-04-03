@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import ToolCallStatus from './ToolCallStatus.js';
-import type { UIMessage } from 'ai';
+import { isToolUIPart, type UIMessage } from 'ai';
 
 interface AssistantMessageProps {
 	message: UIMessage;
@@ -22,12 +22,12 @@ export default function AssistantMessage({ message }: AssistantMessageProps) {
 				if (part.type === 'reasoning') {
 					return (
 						<Box key={`reasoning-${i}`} marginLeft={2}>
-							<Text dimColor>{part.text}</Text>
+							<Text color='grey'>{part.text}</Text>
 						</Box>
 					);
 				}
 
-				if (part.type === 'dynamic-tool') {
+				if (isToolUIPart(part)) {
 					return (
 						<Box key={`tool-${i}`} marginLeft={2}>
 							<ToolCallStatus toolPart={part} />

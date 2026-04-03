@@ -1,11 +1,13 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import type { DynamicToolUIPart } from 'ai';
+import type { UIMessage } from 'ai';
 import DiffView from './DiffView.js';
 
+type ToolPart = Extract<UIMessage['parts'][number], { toolCallId: string }>;
+
 interface ToolCallStatusProps {
-	toolPart: DynamicToolUIPart;
+	toolPart: ToolPart;
 }
 
 const TOOL_ICONS: Record<string, string> = {
@@ -122,9 +124,10 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 }
 
 export default function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
-	const icon = TOOL_ICONS[toolPart.toolName] ?? '🔨';
+	const toolName = toolPart.type === 'dynamic-tool' ? toolPart.toolName : toolPart.type.slice(5);
+	const icon = TOOL_ICONS[toolName] ?? '🔨';
 	const args = (toolPart.input ?? {}) as Record<string, any>;
-	const argsStr = formatArgs(toolPart.toolName, args);
+	const argsStr = formatArgs(toolName, args);
 	const isRunning = toolPart.state === 'input-streaming' || toolPart.state === 'input-available';
 	const isDone = toolPart.state === 'output-available';
 	const isError = toolPart.state === 'output-error';
@@ -143,13 +146,13 @@ export default function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
 				)}
 				<Text>
 					{icon}{' '}
-					<Text bold>{toolPart.toolName}</Text>
+					<Text bold>{toolName}</Text>
 					{argsStr ? <Text dimColor> {argsStr}</Text> : null}
 				</Text>
 			</Box>
 			{isDone && toolPart.state === 'output-available' && toolPart.output != null && (
 				<Box marginLeft={2} flexDirection="column">
-					{formatResult(toolPart.toolName, toolPart.output as any)}
+					{formatResult(toolName, toolPart.output as any)}
 				</Box>
 			)}
 			{isError && toolPart.state === 'output-error' && toolPart.errorText && (
