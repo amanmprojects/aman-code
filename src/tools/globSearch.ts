@@ -1,70 +1,209 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { execSync } from 'node:child_process';
 import * as path from 'node:path';
-import * as fs from 'node:fs';
+import * as fs from 'node:fs/promises';
+
+const DEFAULT_LIMIT = 100;
+const EXCLUDED_DIRECTORIES = new Set(['node_modules', '.git', 'dist']);
+
+type SearchType = 'file' | 'directory' | 'any';
+
+function escapeRegexCharacter(character: string): string {
+	return /[|\\{}()[\]^$+.-]/.test(character) ? `\\${character}` : character;
+}
+
+function normalizeGlobPattern(pattern: string): string {
+	const normalized = pattern.trim().replaceAll('\\', '/');
+	return normalized.startsWith('./') ? normalized.slice(2) : normalized;
+}
+
+function globToRegExp(pattern: string): RegExp {
+	const normalizedPattern = normalizeGlobPattern(pattern);
+	let expression = '^';
+
+	for (let index = 0; index < normalizedPattern.length; index++) {
+		const character = normalizedPattern[index]!;
+		const nextCharacter = normalizedPattern[index + 1];
+		const previousCharacter = normalizedPattern[index - 1];
+		const followingCharacter = normalizedPattern[index + 2];
+
+		if (character === '*') {
+			if (nextCharacter === '*') {
+				const isSegmentGlob = followingCharacter === '/' && (index === 0 || previousCharacter === '/');
+
+				if (isSegmentGlob) {
+					expression += '(?:.*\\/)?';
+					index += 2;
+					continue;
+				}
+
+				expression += '.*';
+				index += 1;
+				continue;
+			}
+
+			expression += '[^/]*';
+			continue;
+		}
+
+		if (character === '?') {
+			expression += '[^/]';
+			continue;
+		}
+
+		if (character === '/') {
+			expression += '\\/';
+			continue;
+		}
+
+		expression += escapeRegexCharacter(character);
+	}
+
+	return new RegExp(`${expression}$`);
+}
+
+function toDisplayPath(filePath: string): string {
+	const relativePath = path.relative(process.cwd(), filePath);
+	if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+		return filePath;
+	}
+
+	return relativePath.split(path.sep).join('/');
+}
+
+function matchesType(type: SearchType, isDirectory: boolean): boolean {
+	if (type === 'any') {
+		return true;
+	}
+
+	return type === 'directory' ? isDirectory : !isDirectory;
+}
+
+async function collectMatches(options: {
+	rootPath: string;
+	currentPath: string;
+	pattern: RegExp;
+	searchType: SearchType;
+	maxDepth?: number;
+	depth: number;
+}): Promise<Array<{ filePath: string; mtimeMs: number }>> {
+	const { rootPath, currentPath, pattern, searchType, maxDepth, depth } = options;
+	const entries = await fs.readdir(currentPath, { withFileTypes: true });
+	const matches: Array<{ filePath: string; mtimeMs: number }> = [];
+
+	for (const entry of entries) {
+		if (entry.isSymbolicLink()) {
+			continue;
+		}
+
+		if (entry.isDirectory() && EXCLUDED_DIRECTORIES.has(entry.name)) {
+			continue;
+		}
+
+		const absolutePath = path.join(currentPath, entry.name);
+		const relativePath = path.relative(rootPath, absolutePath).split(path.sep).join('/');
+		const nextDepth = depth + 1;
+
+		if (maxDepth !== undefined && depth > maxDepth) {
+			continue;
+		}
+
+		if (pattern.test(relativePath) && matchesType(searchType, entry.isDirectory())) {
+			const stats = await fs.stat(absolutePath);
+			matches.push({ filePath: absolutePath, mtimeMs: stats.mtimeMs });
+		}
+
+		if (entry.isDirectory() && (maxDepth === undefined || nextDepth < maxDepth)) {
+			matches.push(
+				...(await collectMatches({
+					rootPath,
+					currentPath: absolutePath,
+					pattern,
+					searchType,
+					maxDepth,
+					depth: nextDepth,
+				})),
+			);
+		}
+	}
+
+	return matches;
+}
 
 export const globSearch = tool({
 	description:
-		'Find files and directories matching a glob pattern. Use this to discover project structure and locate files before reading them.',
+		'Fast file pattern matching tool that works across codebases. Supports glob patterns like "**/*.js" or "src/**/*.ts" and returns matching paths sorted by modification time.',
 	inputSchema: z.object({
 		pattern: z.string().describe('Glob pattern to match, e.g. "*.ts", "src/**/*.tsx"'),
+		path: z
+			.string()
+			.optional()
+			.describe('The directory to search in. If omitted, the current working directory is used.'),
 		searchPath: z
 			.string()
-			.describe('The directory to search within'),
+			.optional()
+			.describe('Deprecated alias for path. The directory to search within.'),
 		type: z
 			.enum(['file', 'directory', 'any'])
 			.optional()
 			.describe('Filter results by type. Default: any'),
 		maxDepth: z
 			.number()
+			.int()
+			.nonnegative()
 			.optional()
 			.describe('Maximum directory depth to search'),
 	}),
-	execute: async ({pattern, searchPath, type, maxDepth}) => {
+	execute: async ({ pattern, path: inputPath, searchPath, type = 'any', maxDepth }) => {
+		const start = Date.now();
 		try {
-			const resolved = path.resolve(searchPath);
-			if (!fs.existsSync(resolved)) {
-				return {error: `Path not found: ${resolved}`};
+			const requestedPath = inputPath ?? searchPath;
+			const resolved = requestedPath ? path.resolve(requestedPath) : process.cwd();
+			let stats;
+
+			try {
+				stats = await fs.stat(resolved);
+			} catch (error: any) {
+				if (error?.code === 'ENOENT') {
+					return {
+						error: `Directory does not exist: ${requestedPath ?? resolved}. Current working directory: ${process.cwd()}.`,
+					};
+				}
+
+				throw error;
 			}
 
-			// Try using `find` command for glob matching
-			const args: string[] = ['find', resolved];
-
-			if (maxDepth !== undefined) {
-				args.push('-maxdepth', String(maxDepth));
+			if (!stats.isDirectory()) {
+				return { error: `Path is not a directory: ${requestedPath ?? resolved}` };
 			}
 
-			// Exclude common directories
-			args.push('(', '-name', 'node_modules', '-o', '-name', '.git', '-o', '-name', 'dist', ')', '-prune', '-o');
-
-			if (type === 'file') {
-				args.push('-type', 'f');
-			} else if (type === 'directory') {
-				args.push('-type', 'd');
-			}
-
-			args.push('-name', pattern, '-print');
-
-			const output = execSync(args.join(' '), {
-				encoding: 'utf-8',
-				maxBuffer: 1024 * 1024,
-				timeout: 15_000,
-				stdio: ['pipe', 'pipe', 'pipe'],
+			const matches = await collectMatches({
+				rootPath: resolved,
+				currentPath: resolved,
+				pattern: globToRegExp(pattern),
+				searchType: type,
+				maxDepth,
+				depth: 0,
 			});
 
-			const results = output.trim().split('\n').filter(Boolean);
-			const capped = results.slice(0, 50);
+			matches.sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+			const truncated = matches.length > DEFAULT_LIMIT;
+			const filenames = matches.slice(0, DEFAULT_LIMIT).map(match => toDisplayPath(match.filePath));
 
 			return {
 				pattern,
+				path: resolved,
 				searchPath: resolved,
-				resultCount: results.length,
-				truncated: results.length > 50,
-				results: capped,
+				durationMs: Date.now() - start,
+				numFiles: filenames.length,
+				filenames,
+				resultCount: filenames.length,
+				truncated,
+				results: filenames,
 			};
 		} catch (error: any) {
-			return {error: `Search failed: ${error.message}`};
+			return { error: `Search failed: ${error.message}` };
 		}
 	},
 });
