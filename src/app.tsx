@@ -73,7 +73,7 @@ export default function App({ mode: initialMode = 'code' }: AppProps) {
 
       {/* Loading indicator */}
       {isLoading && messages.length > 0 && (
-        <Box>
+        <Box marginBottom={1} marginTop={1}>
           <Text color="yellow">
             <Spinner type="dots" />
           </Text>
@@ -83,7 +83,7 @@ export default function App({ mode: initialMode = 'code' }: AppProps) {
 
       {/* Error display */}
       {error && (
-        <Box marginBottom={1}>
+        <Box marginBottom={1} marginTop={1}>
           <Text color="red">Error: {error}</Text>
         </Box>
       )}

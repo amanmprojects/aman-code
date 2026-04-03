@@ -8,7 +8,7 @@ interface Part {
 
 export default function UserMessage({ msg }: { msg: any }) {
     return (
-        <Box key={msg.id} flexDirection='row' borderStyle='round' borderDimColor={true}>
+        <Box key={msg.id} flexDirection='row' borderStyle='round' borderDimColor={true} borderLeft={false} borderRight={false}>
             <Text color="green" bold>
                 {'❯ '}
             </Text>
