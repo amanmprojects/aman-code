@@ -7,6 +7,7 @@ import {
 	createAgentUIStream,
 	isToolUIPart,
 	readUIMessageStream,
+	type ToolExecutionOptions,
 	type UIMessage,
 } from 'ai';
 import {formatUiPerfDuration, logUiPerf} from '../utils/uiPerf.js';
@@ -567,14 +568,16 @@ export function useAgent(mode: Mode) {
 
 			let nextMessages: UIMessage[];
 
-			if (options.approved && tool && 'execute' in tool && tool.execute) {
+			if (options.approved && tool.execute != null) {
 				// Execute the tool and transition to output-available
 				try {
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const output = await (tool as any).execute(input, {
+					const toolExecutionOptions: ToolExecutionOptions = {
+						toolCallId: options.toolCallId,
+						messages: [],
 						abortSignal: undefined,
 						experimental_context: {mode: options.overrideMode ?? mode},
-					});
+					};
+					const output = await tool.execute(input, toolExecutionOptions);
 
 					nextMessages = updateToolPartInMessages({
 						messages: messagesRef.current,

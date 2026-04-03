@@ -108,11 +108,18 @@ export function createTranscriptStore(): TranscriptStore {
 			});
 		},
 		setMeasuredHeight(id, width, height, signature) {
-			const nextHeight = Math.max(1, Math.floor(height));
+			const normalizedWidth = Number(width);
+			const normalizedHeight = Number(height);
+			const nextWidth = Number.isFinite(normalizedWidth)
+				? Math.max(0, Math.floor(normalizedWidth))
+				: 0;
+			const nextHeight = Number.isFinite(normalizedHeight)
+				? Math.max(1, Math.floor(normalizedHeight))
+				: 1;
 			const currentMeasurement = snapshot.measuredHeights[id];
 
 			if (
-				currentMeasurement?.width === width &&
+				currentMeasurement?.width === nextWidth &&
 				currentMeasurement.height === nextHeight &&
 				currentMeasurement.signature === signature
 			) {
@@ -124,7 +131,7 @@ export function createTranscriptStore(): TranscriptStore {
 				measuredHeights: {
 					...snapshot.measuredHeights,
 					[id]: {
-						width,
+						width: nextWidth,
 						height: nextHeight,
 						signature,
 					},
