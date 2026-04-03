@@ -90,7 +90,7 @@ export default function App({ mode: initialMode = 'code' }: AppProps) {
 
       {/* Input */}
       <Box
-        borderStyle="single"
+        borderStyle="bold"
         borderLeft={false}
         borderRight={false}
         flexDirection="row"
