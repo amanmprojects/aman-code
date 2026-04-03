@@ -79,15 +79,20 @@ function matchesType(type: SearchType, isDirectory: boolean): boolean {
 	return type === 'directory' ? isDirectory : !isDirectory;
 }
 
+function matchesAnyPattern(value: string, patterns: RegExp[]): boolean {
+	return patterns.some((pattern) => pattern.test(value));
+}
+
 async function collectMatches(options: {
 	rootPath: string;
 	currentPath: string;
 	pattern: RegExp;
+	excludePatterns: RegExp[];
 	searchType: SearchType;
 	maxDepth?: number;
 	depth: number;
 }): Promise<Array<{ filePath: string; mtimeMs: number }>> {
-	const { rootPath, currentPath, pattern, searchType, maxDepth, depth } = options;
+	const { rootPath, currentPath, pattern, excludePatterns, searchType, maxDepth, depth } = options;
 	const entries = await fs.readdir(currentPath, { withFileTypes: true });
 	const matches: Array<{ filePath: string; mtimeMs: number }> = [];
 
@@ -104,6 +109,10 @@ async function collectMatches(options: {
 		const relativePath = path.relative(rootPath, absolutePath).split(path.sep).join('/');
 		const nextDepth = depth + 1;
 
+		if (matchesAnyPattern(relativePath, excludePatterns)) {
+			continue;
+		}
+
 		if (maxDepth !== undefined && depth > maxDepth) {
 			continue;
 		}
@@ -119,6 +128,7 @@ async function collectMatches(options: {
 					rootPath,
 					currentPath: absolutePath,
 					pattern,
+					excludePatterns,
 					searchType,
 					maxDepth,
 					depth: nextDepth,
@@ -153,12 +163,30 @@ export const globSearch = tool({
 			.nonnegative()
 			.optional()
 			.describe('Maximum directory depth to search'),
+		excludes: z
+			.array(z.string())
+			.optional()
+			.describe('Glob patterns to exclude from the search.'),
+		offset: z
+			.number()
+			.int()
+			.nonnegative()
+			.optional()
+			.describe('Number of matches to skip before returning results. Defaults to 0.'),
+		limit: z
+			.number()
+			.int()
+			.positive()
+			.max(1000)
+			.optional()
+			.describe('Maximum number of results to return. Defaults to 100.'),
 	}),
-	execute: async ({ pattern, path: inputPath, searchPath, type = 'any', maxDepth }) => {
+	execute: async ({ pattern, path: inputPath, searchPath, type = 'any', maxDepth, excludes = [], offset = 0, limit = DEFAULT_LIMIT }) => {
 		const start = Date.now();
 		try {
 			const requestedPath = inputPath ?? searchPath;
 			const resolved = requestedPath ? path.resolve(requestedPath) : process.cwd();
+			const excludePatterns = excludes.map((value) => globToRegExp(value));
 			let stats;
 
 			try {
@@ -181,6 +209,7 @@ export const globSearch = tool({
 				rootPath: resolved,
 				currentPath: resolved,
 				pattern: globToRegExp(pattern),
+				excludePatterns,
 				searchType: type,
 				maxDepth,
 				depth: 0,
@@ -188,15 +217,20 @@ export const globSearch = tool({
 
 			matches.sort((left, right) => right.mtimeMs - left.mtimeMs);
 
-			const truncated = matches.length > DEFAULT_LIMIT;
-			const filenames = matches.slice(0, DEFAULT_LIMIT).map(match => toDisplayPath(match.filePath));
+			const pagedMatches = matches.slice(offset, offset + limit);
+			const truncated = offset + pagedMatches.length < matches.length;
+			const filenames = pagedMatches.map(match => toDisplayPath(match.filePath));
 
 			return {
 				pattern,
 				path: resolved,
 				searchPath: resolved,
+				offset,
+				limit,
+				excludes,
 				durationMs: Date.now() - start,
 				numFiles: filenames.length,
+				totalMatches: matches.length,
 				filenames,
 				resultCount: filenames.length,
 				truncated,
