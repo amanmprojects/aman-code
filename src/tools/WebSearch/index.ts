@@ -35,9 +35,15 @@ export const webSearch = tool({
 
 		try {
 			return await execute(input, options);
-		} catch (error: any) {
+		} catch (error: unknown) {
+			const message =
+				error instanceof Error
+					? error.message
+					: typeof error === 'string'
+					? error
+					: String(error);
 			return {
-				error: `Web search failed: ${error.message}`,
+				error: `Web search failed: ${message}`,
 			};
 		}
 	},

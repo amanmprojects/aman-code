@@ -24,7 +24,6 @@ export const todoWrite = tool({
 	}),
 	execute: async ({todos}) => {
 		const todoList = new Map<string, z.infer<typeof todoItemSchema>>();
-		todoList.clear();
 		for (const todo of todos) {
 			todoList.set(todo.id, todo);
 		}

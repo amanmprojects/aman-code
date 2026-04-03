@@ -158,10 +158,7 @@ async function findSimilarFiles(
  * @param cwd - The base directory used to compute a relative path (typically `process.cwd()`)
  * @returns The relative path with `/` as separators when `targetPath` is within `cwd`, `null` otherwise
  */
-function suggestPathUnderCwd(
-	targetPath: string,
-	cwd: string,
-): string | null {
+function suggestPathUnderCwd(targetPath: string, cwd: string): string | null {
 	// If the path doesn't exist, try to suggest a path relative to cwd
 	const relativePath = path.relative(cwd, targetPath);
 	if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
@@ -206,7 +203,7 @@ export const readFile = tool({
 				};
 			}
 
-			// Check if path exists (using lstat to detect symlinks)
+			// Check if path exists, preserving enough detail to handle symlinks safely.
 			let stat: Stats;
 			try {
 				stat = await fs.lstat(resolved);
@@ -237,11 +234,8 @@ export const readFile = tool({
 				return {error: `Path is a directory, not a file: ${resolved}`};
 			}
 
-			// Check if it's a symbolic link
 			if (stat.isSymbolicLink()) {
-				return {
-					error: `Cannot read symbolic link: ${resolved}. Resolve the link first.`,
-				};
+				stat = await fs.stat(resolved);
 			}
 
 			if (!stat.isFile()) {

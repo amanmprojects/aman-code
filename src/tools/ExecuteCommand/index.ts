@@ -4,10 +4,7 @@ import {execa, type ExecaError} from 'execa';
 import treeKill from 'tree-kill';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {
-	getExecuteCommandDescription,
-	DEFAULT_TIMEOUT_MS,
-} from './prompt.js';
+import {getExecuteCommandDescription, DEFAULT_TIMEOUT_MS} from './prompt.js';
 
 const DANGEROUS_PATTERNS = [
 	/rm\s+(-[a-zA-Z]*)?r[a-zA-Z]*f?\s+\/(?!\S)/,
@@ -26,7 +23,6 @@ const DANGEROUS_PATTERNS = [
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 
-const SIGKILL = 137;
 const SIGTERM = 143;
 
 type CommandClassification = 'read' | 'search' | 'mutating' | 'unknown';
@@ -165,15 +161,13 @@ export const executeCommand = tool({
 				'If true, start the command in the background and return immediately.',
 			),
 	}),
-	execute: async (
-		{
-			command,
-			cwd,
-			timeoutMs = DEFAULT_TIMEOUT_MS,
-			maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
-			background = false,
-		},
-	) => {
+	execute: async ({
+		command,
+		cwd,
+		timeoutMs = DEFAULT_TIMEOUT_MS,
+		maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
+		background = false,
+	}) => {
 		const resolvedCwd = cwd ? path.resolve(cwd) : process.cwd();
 		const classification = classifyCommand(command);
 
@@ -197,6 +191,23 @@ export const executeCommand = tool({
 					env: process.env,
 					reject: false,
 				});
+
+				if (subprocess.pid === undefined) {
+					const errorMessage =
+						'Failed to start background command: subprocess did not provide a PID.';
+					return {
+						command,
+						cwd: resolvedCwd,
+						classification,
+						background: true,
+						pid: null,
+						startedAt,
+						stdout: '',
+						stderr: errorMessage,
+						exitCode: 1,
+						error: errorMessage,
+					};
+				}
 
 				// Unref the subprocess so it doesn't block the event loop
 				subprocess.unref?.();
@@ -231,6 +242,7 @@ export const executeCommand = tool({
 			let stdoutTruncated = false;
 			let stderrTruncated = false;
 			let timedOut = false;
+			let killedByTimeout = false;
 			let exitCode: number | null = null;
 
 			// Use execa with streaming for bounded output
@@ -241,6 +253,7 @@ export const executeCommand = tool({
 
 			const timeoutHandler = () => {
 				timedOut = true;
+				killedByTimeout = true;
 				if (subprocess.pid) {
 					treeKill(subprocess.pid, 'SIGTERM');
 				}
@@ -279,15 +292,10 @@ export const executeCommand = tool({
 			exitCode = result.exitCode ?? (result.timedOut ? SIGTERM : 1);
 
 			// Prepend timeout message if timed out
-			if (result.timedOut || timedOut) {
+			if (result.timedOut || killedByTimeout) {
 				stderr = `Command timed out after ${formatDuration(
 					timeoutMs,
 				)}\n${stderr}`;
-			}
-
-			// Handle kill signals
-			if (exitCode === SIGKILL || exitCode === SIGTERM || result.signal) {
-				timedOut = true;
 			}
 
 			return {
@@ -297,7 +305,7 @@ export const executeCommand = tool({
 				background: false,
 				durationMs: Date.now() - startedAt,
 				timeoutMs,
-				timedOut,
+				timedOut: timedOut || Boolean(result.timedOut),
 				aborted: false,
 				stdout: stdout.trimEnd(),
 				stderr: stderr.trimEnd(),

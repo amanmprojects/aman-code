@@ -139,6 +139,11 @@ async function collectMatches(options: {
 		depth,
 		stopAfter,
 	} = options;
+
+	if (maxDepth !== undefined && depth > maxDepth) {
+		return [];
+	}
+
 	const entries = await fs.readdir(currentPath, {withFileTypes: true});
 	const matches: Array<{filePath: string; mtimeMs: number}> = [];
 
@@ -159,10 +164,6 @@ async function collectMatches(options: {
 		const nextDepth = depth + 1;
 
 		if (matchesAnyPattern(relativePath, excludePatterns)) {
-			continue;
-		}
-
-		if (maxDepth !== undefined && depth > maxDepth) {
 			continue;
 		}
 
