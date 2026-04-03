@@ -1,3 +1,12 @@
 import type { LanguageModel } from 'ai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
-export const modelList: [LanguageModel, ...LanguageModel[]] = ['minimax/minimax-m2.7'];
+const litellm = createOpenAICompatible({
+	baseURL: 'https://openai-litellm.duckdns.org/v1',
+	apiKey: 'sk-9833006363',
+	name: 'litellm',
+});
+
+export const modelList: [LanguageModel, ...LanguageModel[]] = [litellm('vertex-glm-4.7')];
+
+
