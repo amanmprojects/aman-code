@@ -78,6 +78,13 @@ const TOOL_ICONS: Record<string, string> = {
 	todoWrite: '✅',
 };
 
+/**
+ * Produce a concise, human-readable summary of a tool call's arguments.
+ *
+ * @param toolName - The tool identifier (e.g., `readFile`, `executeCommand`, `grepSearch`) used to select formatting rules.
+ * @param args - The argument object supplied to the tool; specific fields (like `filePath`, `command`, `pattern`, `query`, etc.) are extracted when available.
+ * @returns A short string describing the tool's primary arguments (for unknown tools, a JSON snapshot truncated to 80 characters).
+ */
 function formatArgs(toolName: string, args: Record<string, any>): string {
 	switch (toolName) {
 		case 'readFile':
@@ -111,6 +118,13 @@ function formatArgs(toolName: string, args: Record<string, any>): string {
 	}
 }
 
+/**
+ * Convert a tool execution result into a React node suitable for display in the UI.
+ *
+ * @param toolName - The tool identifier used to select a presentation format (e.g., "readFile", "executeCommand").
+ * @param result - The raw result object produced by the tool; may include fields like `content`, `stdout`, `stderr`, `diff`, `todos`, `error`, etc.
+ * @returns A React node that visually represents the tool result (formatted preview, diff view, list, or error text), or `null` when `result` is null/undefined.
+ */
 function formatResult(toolName: string, result: any): React.ReactNode {
 	if (result == null) {
 		return null;
@@ -309,6 +323,14 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 	}
 }
 
+/**
+ * Render the status view for a single tool call, showing an icon, formatted input arguments, and contextual output, error, or approval information.
+ *
+ * The component derives the tool name and presentation state from `toolPart`, formats inputs via `formatArgs`, and formats outputs via `formatResult`. It conditionally renders indicators for running, approval requested/responded, denied, done, and error states, and displays approval reasons or error text when present.
+ *
+ * @param toolPart - The tool call part object containing `toolCallId`, `type`/`toolName`, `input`, `state`, and optional `output`, `errorText`, and `approval` fields used to determine what to render.
+ * @returns The Ink/React element representing the tool call status block.
+ */
 function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 	const toolName =
 		toolPart.type === 'dynamic-tool'

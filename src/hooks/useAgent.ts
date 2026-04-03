@@ -42,6 +42,11 @@ export type PendingInteraction =
 	  };
 
 let msgCounter = 0;
+/**
+ * Generate a unique identifier for a message.
+ *
+ * @returns A string message id suitable for use as a unique message identifier (e.g. "msg-<timestamp>-<counter>").
+ */
 function generateId() {
 	return `msg-${Date.now()}-${++msgCounter}`;
 }
@@ -84,6 +89,12 @@ function normalizeMessages(
 	});
 }
 
+/**
+ * Create a user-role UIMessage containing a single text part.
+ *
+ * @param text - The message text to include in the created message
+ * @returns A `UIMessage` with `role: 'user'`, a generated `id`, and one text part containing `text`
+ */
 function createUserMessage(text: string): UIMessage {
 	return {
 		id: generateId(),
@@ -92,10 +103,23 @@ function createUserMessage(text: string): UIMessage {
 	};
 }
 
+/**
+ * Derives the tool's canonical name from a tool UI part.
+ *
+ * @param part - A tool UI part (contains type and, for dynamic tools, a `toolName`)
+ * @returns The tool name extracted from the part
+ */
 function getToolName(part: ToolPart): string {
 	return part.type === 'dynamic-tool' ? part.toolName : part.type.slice(5);
 }
 
+/**
+ * Appends an assistant message to a conversation, replacing the final message if that final message is already from the assistant.
+ *
+ * @param baseMessages - The existing conversation messages in order.
+ * @param assistantMessage - The assistant message to append or use as a replacement.
+ * @returns The new message array where `assistantMessage` replaces the last message if it has `role === 'assistant'`, otherwise `assistantMessage` is appended. 
+ */
 function mergeAssistantMessage(
 	baseMessages: UIMessage[],
 	assistantMessage: UIMessage,
@@ -108,6 +132,15 @@ function mergeAssistantMessage(
 	return [...baseMessages, assistantMessage];
 }
 
+/**
+ * Update a specific tool UI part inside the provided messages by applying `updater` to the matching part.
+ *
+ * @param messages - The conversation messages to search and update
+ * @param messageId - The id of the message that contains the tool part to update
+ * @param toolCallId - The tool call id that identifies which tool UI part to update within the message
+ * @param updater - A function that receives the matched `ToolPart` and returns the updated `ToolPart`
+ * @returns A new array of `UIMessage` where the targeted tool part has been replaced by the updater's result; all other messages and parts are preserved
+ */
 function updateToolPartInMessages(options: {
 	messages: UIMessage[];
 	messageId: string;
@@ -134,6 +167,16 @@ function updateToolPartInMessages(options: {
 	});
 }
 
+/**
+ * Find the most recent unresolved user-facing interaction emitted in assistant tool UI parts.
+ *
+ * Scans `messages` from newest to oldest and returns the latest pending interaction produced by an assistant
+ * tool UI part: either an approval request (kind `'approval'`) or a user question emitted by the
+ * `askUserQuestion` tool (kind `'question'`). Returns `null` when no pending interaction is found.
+ *
+ * @param messages - Conversation messages to scan (newest messages may be at the end of the array)
+ * @returns A `PendingInteraction` describing the latest unresolved approval or question, or `null` if none exists.
+ */
 function extractPendingInteraction(
 	messages: UIMessage[],
 ): PendingInteraction | null {
@@ -281,6 +324,19 @@ function extractPendingInteraction(
 	return null;
 }
 
+/**
+ * React hook that manages an interactive, streaming agent conversation and handles tool-driven user interactions.
+ *
+ * @param mode - Agent execution mode used when advancing the conversation (affects allowed tools and agent behavior)
+ * @returns An object with the agent conversation state and control callbacks:
+ *  - `messages`: current normalized `UIMessage[]` conversation
+ *  - `isLoading`: `true` while the agent is running
+ *  - `error`: error message string or `null`
+ *  - `sendMessage(text)`: append a user message and run the agent
+ *  - `pendingInteraction`: the most recent unresolved tool interaction (`PendingInteraction | null`)
+ *  - `submitToolApproval(options)`: submit an approval response for a tool UI part and rerun the agent
+ *  - `submitToolOutput(options)`: submit tool output for a tool UI part and rerun the agent
+ */
 export function useAgent(mode: Mode) {
 	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [isLoading, setIsLoading] = useState(false);

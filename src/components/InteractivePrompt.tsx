@@ -9,6 +9,15 @@ interface InteractivePromptProps {
 	disabled?: boolean;
 }
 
+/**
+ * Renders an Ink-based interactive terminal prompt for either an approval confirmation or a selectable question.
+ *
+ * @param interaction - The pending interaction that defines prompt kind, question text, options, whether multiple selection is allowed, and optional detail
+ * @param onApprove - Callback invoked with `true` for approval or `false` for denial when an approval prompt is submitted
+ * @param onSubmitAnswer - Callback invoked with the array of selected option IDs when a question prompt is submitted
+ * @param disabled - When `true`, disables input handling (defaults to `false`)
+ * @returns The rendered Ink UI element for the interactive prompt
+ */
 export default function InteractivePrompt({
 	interaction,
 	onApprove,

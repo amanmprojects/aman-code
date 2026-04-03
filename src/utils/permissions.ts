@@ -30,12 +30,30 @@ export const MODES: Record<
 
 const READ_ONLY_TOOLS = getReadOnlyToolNames();
 
+/**
+ * Retrieve the set of tool names allowed for the specified mode.
+ *
+ * @param mode - The mode to query (`'plan' | 'code' | 'yolo'`). If an unrecognized value is provided, the function falls back to `'plan'`.
+ * @returns The set of `ToolName` values permitted for the given mode.
+ */
 export function getAllowedToolNames(mode: Mode): Set<ToolName> {
 	return getAllowedToolNamesForMode(mode);
 }
 
+/**
+ * Determines whether a tool name is classified as read-only.
+ *
+ * @param name - The tool name to check
+ * @returns `true` if the given name corresponds to a read-only tool, `false` otherwise.
+ */
 export function isReadOnlyToolName(name: string): boolean {
 	return READ_ONLY_TOOLS.has(name as ToolName);
 }
 
+/**
+ * Checks whether a tool name corresponds to an interactive tool.
+ *
+ * @param name - The tool name to check
+ * @returns `true` if the tool is interactive, `false` otherwise
+ */
 export {isInteractiveToolName as isInteractiveTool};

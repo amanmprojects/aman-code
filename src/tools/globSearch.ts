@@ -77,6 +77,13 @@ function toDisplayPath(filePath: string): string {
 	return relativePath.split(path.sep).join('/');
 }
 
+/**
+ * Determines whether an item matches the requested search type.
+ *
+ * @param type - The desired search type: 'file', 'directory', or 'any'
+ * @param isDirectory - `true` if the item is a directory, `false` if it is a file
+ * @returns `true` if the item matches `type` (`true` for 'any'; for 'directory' when `isDirectory` is `true`; for 'file' when `isDirectory` is `false`), `false` otherwise
+ */
 function matchesType(type: SearchType, isDirectory: boolean): boolean {
 	if (type === 'any') {
 		return true;
@@ -85,10 +92,31 @@ function matchesType(type: SearchType, isDirectory: boolean): boolean {
 	return type === 'directory' ? isDirectory : !isDirectory;
 }
 
+/**
+ * Checks whether a string matches at least one regular expression from a list.
+ *
+ * @param value - The string to test against the patterns
+ * @param patterns - Array of `RegExp` objects to test `value` against
+ * @returns `true` if any pattern matches `value`, `false` otherwise
+ */
 function matchesAnyPattern(value: string, patterns: RegExp[]): boolean {
 	return patterns.some(pattern => pattern.test(value));
 }
 
+/**
+ * Recursively collects filesystem entries under `currentPath` whose paths (relative to `rootPath`) match `pattern` and `searchType`, returning each match with its modification time.
+ *
+ * Skips symbolic links and directories named in `EXCLUDED_DIRECTORIES`. Paths are compared against `excludePatterns` using the relative path from `rootPath` with forward-slash separators. Recursion does not descend beyond `maxDepth` (when provided); `depth` is the current recursion depth with 0 representing `rootPath`.
+ *
+ * @param options.rootPath - Base directory used to compute relative paths for matching and exclusions
+ * @param options.currentPath - Directory to search in this call (may be a nested directory during recursion)
+ * @param options.pattern - Regex that candidate relative paths must match to be included
+ * @param options.excludePatterns - Regexes that, if any match a relative path, cause that entry (and its subtree) to be skipped
+ * @param options.searchType - Controls whether to include files, directories, or both
+ * @param options.maxDepth - Optional maximum recursion depth (inclusive behavior governed by `depth`)
+ * @param options.depth - Current recursion depth; 0 corresponds to `rootPath`
+ * @returns An array of objects each containing `filePath` (absolute path to the match) and `mtimeMs` (its modification time in milliseconds)
+ */
 async function collectMatches(options: {
 	rootPath: string;
 	currentPath: string;

@@ -8,6 +8,12 @@ interface AssistantMessageProps {
 	message: UIMessage;
 }
 
+/**
+ * Render an assistant message composed of its parts (text, reasoning, and tool UI parts).
+ *
+ * @param message - The `UIMessage` whose `parts` are rendered into Ink components
+ * @returns The rendered assistant message as an Ink/React element
+ */
 function AssistantMessage({message}: AssistantMessageProps) {
 	return (
 		<Box flexDirection="column" marginBottom={1}>

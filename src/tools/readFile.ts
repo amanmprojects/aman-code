@@ -55,6 +55,14 @@ function hasBinaryExtension(filePath: string): boolean {
 	return BINARY_EXTENSIONS.has(ext);
 }
 
+/**
+ * Determines whether a file is likely binary.
+ *
+ * Checks the file's extension against a known binary list and samples the file's first 8KB for null bytes; read errors are suppressed and treated as "not binary".
+ *
+ * @param filePath - Path to the file to inspect
+ * @returns `true` if the file is likely binary (binary extension or contains a null byte within the first 8KB), `false` otherwise.
+ */
 async function isBinaryFile(filePath: string): Promise<boolean> {
 	// Quick check: extension-based
 	if (hasBinaryExtension(filePath)) return true;
@@ -84,6 +92,18 @@ async function isBinaryFile(filePath: string): Promise<boolean> {
 	return false;
 }
 
+/**
+ * Suggests a filename in the same directory as a requested path when the exact target is missing.
+ *
+ * Searches the target's directory for files whose names contain each other or share the same basename
+ * (ignoring extensions). If a similar file is found and resides under `cwd`, returns its relative path
+ * with OS separators normalized to `/`; otherwise returns the similar file's basename. Returns `null`
+ * if no suggestion can be produced or an error occurs while searching.
+ *
+ * @param targetPath - The original (missing) target path to base suggestions on
+ * @param cwd - Current working directory used to produce a relative suggestion when possible
+ * @returns A forward-slash normalized relative path to a similar file under `cwd`, the similar filename if not under `cwd`, or `null` if no suggestion exists
+ */
 async function findSimilarFiles(
 	targetPath: string,
 	cwd: string,
@@ -130,7 +150,17 @@ async function findSimilarFiles(
 	return null;
 }
 
-function suggestPathUnderCwd(targetPath: string, cwd: string): string | null {
+/**
+ * Provide a normalized forward-slash relative path from `cwd` to `targetPath` when `targetPath` is located under `cwd`.
+ *
+ * @param targetPath - The absolute or relative path to the target file or directory
+ * @param cwd - The base directory used to compute a relative path (typically `process.cwd()`)
+ * @returns The relative path with `/` as separators when `targetPath` is within `cwd`, `null` otherwise
+ */
+function suggestPathUnderCwd(
+	targetPath: string,
+	cwd: string,
+): string | null {
 	// If the path doesn't exist, try to suggest a path relative to cwd
 	const relativePath = path.relative(cwd, targetPath);
 	if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {

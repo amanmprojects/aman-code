@@ -39,6 +39,15 @@ const READ_ONLY_COMMAND_PATTERNS = [
 
 const SEARCH_COMMAND_PATTERNS = [/^\s*(grep|rg|find|fd)\b/i];
 
+/**
+ * Classifies a shell command as one of four categories describing its likely effect.
+ *
+ * @param command - The shell command string to classify.
+ * @returns The classification: `search` if the command matches known search patterns,
+ * `read` if it matches known read-only patterns, `mutating` if it matches dangerous patterns
+ * or contains common file/package/modification tools (e.g., `mv`, `cp`, `sed`, `python`, `npm`, `git`, `chmod`),
+ * and `unknown` if none of the above apply.
+ */
 function classifyCommand(command: string): CommandClassification {
 	if (SEARCH_COMMAND_PATTERNS.some(pattern => pattern.test(command))) {
 		return 'search';
@@ -59,6 +68,12 @@ function classifyCommand(command: string): CommandClassification {
 		: 'unknown';
 }
 
+/**
+ * Appends `chunk` to `current` while ensuring the result does not exceed `limit` characters.
+ *
+ * @param limit - The maximum allowed length of the returned `text` in characters.
+ * @returns An object with `text` containing the concatenated (and possibly truncated) result, and `truncated` — `true` if part of `chunk` was omitted or if `current` already met the limit, `false` otherwise.
+ */
 function appendBoundedText(
 	current: string,
 	chunk: string,
@@ -85,6 +100,12 @@ function appendBoundedText(
 	};
 }
 
+/**
+ * Formats a duration in milliseconds into a human-readable minutes/seconds string.
+ *
+ * @param ms - Duration in milliseconds
+ * @returns The duration as "{minutes}m {seconds}s" when at least one minute, otherwise as "{seconds}s"
+ */
 function formatDuration(ms: number): string {
 	const seconds = Math.floor(ms / 1000);
 	const minutes = Math.floor(seconds / 60);
@@ -96,6 +117,14 @@ function formatDuration(ms: number): string {
 	return `${seconds}s`;
 }
 
+/**
+ * Detects whether a shell command is potentially dangerous.
+ *
+ * Tests the provided shell command string against the configured dangerous patterns.
+ *
+ * @param command - The shell command to evaluate
+ * @returns `true` if the command matches any configured dangerous pattern, `false` otherwise.
+ */
 export function isDangerousCommand(command: string): boolean {
 	return DANGEROUS_PATTERNS.some(pattern => pattern.test(command));
 }
