@@ -10,12 +10,20 @@ interface AssistantMessageProps {
 }
 
 function trimToTailLines(text: string, tailLines: number) {
+	if (tailLines <= 0) {
+		return '';
+	}
+
 	const lines = text.split('\n');
 	if (lines.length <= tailLines) {
 		return text;
 	}
 
 	return lines.slice(-tailLines).join('\n');
+}
+
+function getLineCount(text: string) {
+	return text.split('\n').length;
 }
 
 /**
@@ -25,14 +33,41 @@ function trimToTailLines(text: string, tailLines: number) {
  * @returns The rendered assistant message as an Ink/React element
  */
 function AssistantMessage({message, tailLines}: AssistantMessageProps) {
+	const trimmedTextByIndex = new Map<number, string>();
+
+	if (tailLines != null) {
+		let tailLinesRemaining = tailLines;
+
+		for (let index = message.parts.length - 1; index >= 0; index -= 1) {
+			const part = message.parts[index];
+			if (part?.type !== 'text' || !part.text) {
+				continue;
+			}
+
+			const lineCount = getLineCount(part.text);
+			const linesForPart = Math.min(lineCount, Math.max(0, tailLinesRemaining));
+
+			trimmedTextByIndex.set(
+				index,
+				linesForPart >= lineCount
+					? part.text
+					: trimToTailLines(part.text, linesForPart),
+			);
+
+			tailLinesRemaining -= lineCount;
+		}
+	}
+
 	return (
 		<Box flexDirection="column" marginBottom={1}>
 			{message.parts.map((part, i) => {
 				if (part.type === 'text' && part.text) {
 					const trimmedText =
-						tailLines == null
-							? part.text
-							: trimToTailLines(part.text, tailLines);
+						tailLines == null ? part.text : trimmedTextByIndex.get(i) ?? '';
+
+					if (trimmedText.length === 0) {
+						return null;
+					}
 
 					return (
 						<Box

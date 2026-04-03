@@ -1,12 +1,5 @@
-import {useSyncExternalStore} from 'react';
+import {useCallback, useSyncExternalStore} from 'react';
 import type {UIMessage} from 'ai';
-
-export interface TranscriptViewportState {
-	scrollTopRows: number;
-	isStickyToBottom: boolean;
-	heightRows: number;
-	widthCols: number;
-}
 
 export interface TranscriptMeasurement {
 	width: number;
@@ -18,7 +11,6 @@ interface TranscriptSnapshot {
 	orderedIds: string[];
 	messagesById: Record<string, UIMessage>;
 	measuredHeights: Record<string, TranscriptMeasurement>;
-	viewport: TranscriptViewportState;
 }
 
 export interface TranscriptStore {
@@ -34,24 +26,6 @@ export interface TranscriptStore {
 		height: number,
 		signature: string,
 	) => void;
-	setViewportMetrics: (metrics: {
-		heightRows: number;
-		widthCols: number;
-	}) => void;
-	setScrollTop: (
-		scrollTopRows: number,
-		options?: {
-			maxScrollTop?: number;
-			isStickyToBottom?: boolean;
-		},
-	) => void;
-	scrollBy: (deltaRows: number, maxScrollTop: number) => void;
-	scrollToTop: () => void;
-	scrollToBottom: (maxScrollTop?: number) => void;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
 }
 
 export function createTranscriptStore(): TranscriptStore {
@@ -59,13 +33,10 @@ export function createTranscriptStore(): TranscriptStore {
 		orderedIds: [],
 		messagesById: {},
 		measuredHeights: {},
-		viewport: {
-			scrollTopRows: 0,
-			isStickyToBottom: true,
-			heightRows: 0,
-			widthCols: 0,
-		},
 	};
+	let cachedMessages = [] as UIMessage[];
+	let cachedOrderedIdsRef = snapshot.orderedIds;
+	let cachedMessagesByIdRef = snapshot.messagesById;
 	const listeners = new Set<() => void>();
 
 	const publish = (nextSnapshot: TranscriptSnapshot) => {
@@ -90,9 +61,19 @@ export function createTranscriptStore(): TranscriptStore {
 			return snapshot;
 		},
 		getMessages() {
-			return snapshot.orderedIds
+			if (
+				cachedOrderedIdsRef === snapshot.orderedIds &&
+				cachedMessagesByIdRef === snapshot.messagesById
+			) {
+				return cachedMessages;
+			}
+
+			cachedMessages = snapshot.orderedIds
 				.map(id => snapshot.messagesById[id])
 				.filter((message): message is UIMessage => message != null);
+			cachedOrderedIdsRef = snapshot.orderedIds;
+			cachedMessagesByIdRef = snapshot.messagesById;
+			return cachedMessages;
 		},
 		getMessageIds() {
 			return snapshot.orderedIds;
@@ -150,112 +131,15 @@ export function createTranscriptStore(): TranscriptStore {
 				},
 			});
 		},
-		setViewportMetrics(metrics) {
-			const nextHeightRows = Math.max(0, Math.floor(metrics.heightRows));
-			const nextWidthCols = Math.max(0, Math.floor(metrics.widthCols));
-
-			if (
-				snapshot.viewport.heightRows === nextHeightRows &&
-				snapshot.viewport.widthCols === nextWidthCols
-			) {
-				return;
-			}
-
-			publish({
-				...snapshot,
-				viewport: {
-					...snapshot.viewport,
-					heightRows: nextHeightRows,
-					widthCols: nextWidthCols,
-				},
-			});
-		},
-		setScrollTop(scrollTopRows, options) {
-			const maxScrollTop = Math.max(0, options?.maxScrollTop ?? scrollTopRows);
-			const nextScrollTop = clamp(scrollTopRows, 0, maxScrollTop);
-			const nextSticky =
-				options?.isStickyToBottom ?? snapshot.viewport.isStickyToBottom;
-
-			if (
-				snapshot.viewport.scrollTopRows === nextScrollTop &&
-				snapshot.viewport.isStickyToBottom === nextSticky
-			) {
-				return;
-			}
-
-			publish({
-				...snapshot,
-				viewport: {
-					...snapshot.viewport,
-					scrollTopRows: nextScrollTop,
-					isStickyToBottom: nextSticky,
-				},
-			});
-		},
-		scrollBy(deltaRows, maxScrollTop) {
-			const nextScrollTop = clamp(
-				snapshot.viewport.scrollTopRows + deltaRows,
-				0,
-				Math.max(0, maxScrollTop),
-			);
-			const nextSticky = nextScrollTop >= maxScrollTop;
-
-			if (
-				snapshot.viewport.scrollTopRows === nextScrollTop &&
-				snapshot.viewport.isStickyToBottom === nextSticky
-			) {
-				return;
-			}
-
-			publish({
-				...snapshot,
-				viewport: {
-					...snapshot.viewport,
-					scrollTopRows: nextScrollTop,
-					isStickyToBottom: nextSticky,
-				},
-			});
-		},
-		scrollToTop() {
-			if (
-				snapshot.viewport.scrollTopRows === 0 &&
-				snapshot.viewport.isStickyToBottom === false
-			) {
-				return;
-			}
-
-			publish({
-				...snapshot,
-				viewport: {
-					...snapshot.viewport,
-					scrollTopRows: 0,
-					isStickyToBottom: false,
-				},
-			});
-		},
-		scrollToBottom(maxScrollTop = 0) {
-			const clampedMaxScrollTop = Math.max(0, maxScrollTop);
-			if (
-				snapshot.viewport.scrollTopRows === clampedMaxScrollTop &&
-				snapshot.viewport.isStickyToBottom
-			) {
-				return;
-			}
-
-			publish({
-				...snapshot,
-				viewport: {
-					...snapshot.viewport,
-					scrollTopRows: clampedMaxScrollTop,
-					isStickyToBottom: true,
-				},
-			});
-		},
 	};
 }
 
 export function useTranscriptSnapshot(store: TranscriptStore) {
-	return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+	return useSyncExternalStore(
+		store.subscribe,
+		store.getSnapshot,
+		store.getSnapshot,
+	);
 }
 
 export function useTranscriptMessageIds(store: TranscriptStore) {
@@ -267,17 +151,14 @@ export function useTranscriptMessageIds(store: TranscriptStore) {
 }
 
 export function useTranscriptMessage(store: TranscriptStore, id: string) {
-	return useSyncExternalStore(
-		store.subscribe,
+	const getMessageSnapshot = useCallback(
 		() => store.getMessageById(id),
-		() => store.getMessageById(id),
+		[store, id],
 	);
-}
 
-export function useTranscriptViewport(store: TranscriptStore) {
 	return useSyncExternalStore(
 		store.subscribe,
-		() => store.getSnapshot().viewport,
-		() => store.getSnapshot().viewport,
+		getMessageSnapshot,
+		getMessageSnapshot,
 	);
 }

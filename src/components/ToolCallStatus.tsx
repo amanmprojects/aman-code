@@ -381,6 +381,7 @@ export default memo(ToolCallStatus, (prevProps, nextProps) => {
 		prevPart === nextPart ||
 		(prevPart.toolCallId === nextPart.toolCallId &&
 			prevPart.type === nextPart.type &&
+			getToolName(prevPart) === getToolName(nextPart) &&
 			prevPart.state === nextPart.state &&
 			prevPart.errorText === nextPart.errorText &&
 			prevPart.output === nextPart.output &&
