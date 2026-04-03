@@ -6,7 +6,7 @@ import 'dotenv/config';
 
 export function createAgent(mode: Mode) {
 	return new ToolLoopAgent({
-		model: 'zai/glm-4.7-flash',
+		model: 'minimax/minimax-m2.7',
 		instructions: systemPrompt,
 		tools: getToolsForMode(mode),
 	});

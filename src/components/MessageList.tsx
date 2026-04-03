@@ -11,10 +11,10 @@ interface MessageListProps {
 export default function MessageList({ messages }: MessageListProps) {
 	return (
 		<Box flexDirection="column">
-			{messages.map((msg, i) => {
+			{messages.map((msg) => {
 				if (msg.role === 'user') {
 					return (
-						<Box key={msg.id} flexDirection='row' borderStyle='round'>
+						<Box key={msg.id} flexDirection='row' borderStyle='round' borderDimColor={true}>
 								<Text color="green" bold>
 									{'❯ '}
 								</Text>
