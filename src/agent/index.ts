@@ -1,5 +1,6 @@
 import { ToolLoopAgent } from 'ai';
-import { systemPrompt } from '../prompts/system.js';
+import { codePrompt } from '../prompts/code.js';
+import { planPrompt } from '../prompts/plan.js';
 import { allTools, type AgentToolName } from '../tools/index.js';
 import type { Mode } from '../utils/permissions.js';
 import 'dotenv/config';
@@ -10,13 +11,18 @@ type AgentCallOptions = {
 	mode?: Mode;
 };
 
+function getSystemPromptForMode(mode: Mode | undefined) {
+	return mode === 'plan' ? planPrompt : codePrompt;
+}
+
 export function createAgent() {
 	return new ToolLoopAgent<AgentCallOptions, typeof allTools>({
 		model: modelList[0],
-		instructions: systemPrompt,
+		instructions: codePrompt,
 		tools: allTools,
 		prepareCall: ({ options, ...callArgs }) => ({
 			...callArgs,
+			instructions: getSystemPromptForMode(options?.mode),
 			activeTools: options?.activeTools,
 			experimental_context: {
 				mode: options?.mode,

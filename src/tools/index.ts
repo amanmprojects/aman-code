@@ -22,6 +22,12 @@ const executeCommandWithModeSafety = tool({
 	) => {
 		const context = toolOptions.experimental_context as { mode?: Mode } | undefined;
 
+		if (context?.mode === 'plan') {
+			return {
+				error: `Command blocked in PLAN mode: "${args.command}" — command execution is not allowed in PLAN mode. Switch to CODE or YOLO mode to run it.`,
+			};
+		}
+
 		if (context?.mode === 'code' && isDangerousCommand(args.command)) {
 			return {
 				error: `Command blocked in CODE mode: "${args.command}" — this looks dangerous. Switch to YOLO mode to run it.`,
