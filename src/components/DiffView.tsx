@@ -1,12 +1,12 @@
-import React from 'react';
-import { Box, Text } from 'ink';
-import { parseDiff } from '../utils/diff.js';
+import React, {memo} from 'react';
+import {Box, Text} from 'ink';
+import {parseDiff} from '../utils/diff.js';
 
 interface DiffViewProps {
 	diff: string;
 }
 
-export default function DiffView({ diff }: DiffViewProps) {
+function DiffView({diff}: DiffViewProps) {
 	const lines = parseDiff(diff);
 
 	if (lines.length === 0) {
@@ -48,3 +48,8 @@ export default function DiffView({ diff }: DiffViewProps) {
 		</Box>
 	);
 }
+
+export default memo(
+	DiffView,
+	(previousProps, nextProps) => previousProps.diff === nextProps.diff,
+);

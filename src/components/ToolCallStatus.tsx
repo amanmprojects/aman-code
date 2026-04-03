@@ -10,59 +10,6 @@ interface ToolCallStatusProps {
 	toolPart: ToolPart;
 }
 
-function deepEqual(left: unknown, right: unknown): boolean {
-	if (Object.is(left, right)) {
-		return true;
-	}
-
-	if (typeof left !== typeof right) {
-		return false;
-	}
-
-	if (left == null || right == null) {
-		return false;
-	}
-
-	if (Array.isArray(left) && Array.isArray(right)) {
-		if (left.length !== right.length) {
-			return false;
-		}
-
-		for (let index = 0; index < left.length; index += 1) {
-			if (!deepEqual(left[index], right[index])) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	if (typeof left === 'object' && typeof right === 'object') {
-		const leftRecord = left as Record<string, unknown>;
-		const rightRecord = right as Record<string, unknown>;
-		const leftKeys = Object.keys(leftRecord);
-		const rightKeys = Object.keys(rightRecord);
-
-		if (leftKeys.length !== rightKeys.length) {
-			return false;
-		}
-
-		for (const key of leftKeys) {
-			if (!Object.hasOwn(rightRecord, key)) {
-				return false;
-			}
-
-			if (!deepEqual(leftRecord[key], rightRecord[key])) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	return false;
-}
-
 const TOOL_ICONS: Record<string, string> = {
 	readFile: '📄',
 	writeFile: '✏️',
@@ -118,6 +65,19 @@ function formatArgs(toolName: string, args: Record<string, any>): string {
 		default:
 			return JSON.stringify(args).slice(0, 80);
 	}
+}
+
+function getToolName(toolPart: ToolPart): string {
+	return toolPart.type === 'dynamic-tool'
+		? toolPart.toolName
+		: toolPart.type.slice(5);
+}
+
+function getToolArgSummary(toolPart: ToolPart): string {
+	return formatArgs(
+		getToolName(toolPart),
+		(toolPart.input ?? {}) as Record<string, any>,
+	);
 }
 
 /**
@@ -335,10 +295,7 @@ function formatResult(toolName: string, result: any): React.ReactNode {
  * @returns The Ink/React element representing the tool call status block.
  */
 function ToolCallStatus({toolPart}: ToolCallStatusProps) {
-	const toolName =
-		toolPart.type === 'dynamic-tool'
-			? toolPart.toolName
-			: toolPart.type.slice(5);
+	const toolName = getToolName(toolPart);
 	const icon = TOOL_ICONS[toolName] ?? '🔨';
 	const args = (toolPart.input ?? {}) as Record<string, any>;
 	const argsStr = formatArgs(toolName, args);
@@ -400,11 +357,11 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 						{formatResult(toolName, toolPart.output as any)}
 					</Box>
 				)}
-				{isDenied && (
-					<Box marginLeft={2}>
-						<Text color="yellow">
-							{toolPart.approval?.reason ?? 'Tool execution denied.'}
-						</Text>
+			{isDenied && (
+				<Box marginLeft={2}>
+					<Text color="yellow">
+						{toolPart.approval?.reason ?? 'Tool execution denied.'}
+					</Text>
 				</Box>
 			)}
 			{isError && toolPart.state === 'output-error' && toolPart.errorText && (
@@ -416,41 +373,19 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 	);
 }
 
-// Memoize to prevent re-renders when parent updates but toolPart hasn't changed
 export default memo(ToolCallStatus, (prevProps, nextProps) => {
 	const prevPart = prevProps.toolPart;
 	const nextPart = nextProps.toolPart;
 
-	if (prevPart.toolCallId !== nextPart.toolCallId) {
-		return false;
-	}
-
-	if (prevPart.type !== nextPart.type || prevPart.state !== nextPart.state) {
-		return false;
-	}
-
-	if (!deepEqual(prevPart.input, nextPart.input)) {
-		return false;
-	}
-
-	switch (nextPart.state) {
-		case 'input-streaming':
-		case 'input-available':
-			return true;
-		case 'approval-requested':
-			return deepEqual(prevPart.approval, nextPart.approval);
-		case 'approval-responded':
-			return deepEqual(prevPart.approval, nextPart.approval);
-		case 'output-error':
-			return prevPart.errorText === nextPart.errorText;
-		case 'output-denied':
-			return (
-				prevPart.errorText === nextPart.errorText &&
-				deepEqual(prevPart.approval, nextPart.approval)
-			);
-		case 'output-available':
-			return deepEqual(prevPart.output, nextPart.output);
-		default:
-			return deepEqual(prevPart as unknown, nextPart as unknown);
-	}
+	return (
+		prevPart === nextPart ||
+		(prevPart.toolCallId === nextPart.toolCallId &&
+			prevPart.type === nextPart.type &&
+			getToolName(prevPart) === getToolName(nextPart) &&
+			prevPart.state === nextPart.state &&
+			prevPart.errorText === nextPart.errorText &&
+			prevPart.output === nextPart.output &&
+			prevPart.approval === nextPart.approval &&
+			getToolArgSummary(prevPart) === getToolArgSummary(nextPart))
+	);
 });

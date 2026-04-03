@@ -27,7 +27,7 @@ export default function App({mode: initialMode = 'code'}: AppProps) {
 	const [mode, setMode] = useState<Mode>(initialMode);
 	const [interactionError, setInteractionError] = useState<string | null>(null);
 	const {
-		messages,
+		transcriptStore,
 		isLoading,
 		error,
 		sendMessage,
@@ -158,7 +158,7 @@ export default function App({mode: initialMode = 'code'}: AppProps) {
 		<Box flexDirection="column" paddingTop={0}>
 			<AppHeader />
 			<ConversationPanel
-				messages={messages}
+				transcriptStore={transcriptStore}
 				isLoading={isLoading}
 				error={error}
 			/>

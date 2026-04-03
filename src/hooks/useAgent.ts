@@ -1,16 +1,21 @@
-import {useState, useCallback, useMemo, useRef} from 'react';
+import {useState, useCallback, useRef} from 'react';
 import {createAgent} from '../agent/index.js';
 import type {Mode} from '../utils/permissions.js';
 import {getAllowedToolNames} from '../utils/permissions.js';
-import type {AgentToolName} from '../tools/index.js';
+import {allTools, type AgentToolName} from '../tools/index.js';
 import {
 	createAgentUIStream,
 	isToolUIPart,
 	readUIMessageStream,
+	type ToolExecutionOptions,
 	type UIMessage,
 } from 'ai';
 import {formatUiPerfDuration, logUiPerf} from '../utils/uiPerf.js';
 import {getErrorMessage, classifyError} from '../utils/errorClassification.js';
+import {
+	createTranscriptStore,
+	type TranscriptStore,
+} from '../state/transcriptStore.js';
 
 type ToolPart = Extract<UIMessage['parts'][number], {toolCallId: string}>;
 
@@ -118,7 +123,7 @@ function getToolName(part: ToolPart): string {
  *
  * @param baseMessages - The existing conversation messages in order.
  * @param assistantMessage - The assistant message to append or use as a replacement.
- * @returns The new message array where `assistantMessage` replaces the last message if it has `role === 'assistant'`, otherwise `assistantMessage` is appended. 
+ * @returns The new message array where `assistantMessage` replaces the last message if it has `role === 'assistant'`, otherwise `assistantMessage` is appended.
  */
 function mergeAssistantMessage(
 	baseMessages: UIMessage[],
@@ -338,10 +343,12 @@ function extractPendingInteraction(
  *  - `submitToolOutput(options)`: submit tool output for a tool UI part and rerun the agent
  */
 export function useAgent(mode: Mode) {
-	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [pendingInteraction, setPendingInteraction] =
+		useState<PendingInteraction | null>(null);
 	const agentRef = useRef(createAgent());
+	const transcriptStoreRef = useRef<TranscriptStore>(createTranscriptStore());
 	const messagesRef = useRef<UIMessage[]>([]);
 	const agentRunIdRef = useRef(0);
 	const agentAbortRef = useRef<AbortController | null>(null);
@@ -352,7 +359,25 @@ export function useAgent(mode: Mode) {
 			messagesRef.current,
 		);
 		messagesRef.current = normalizedMessages;
-		setMessages(normalizedMessages);
+		transcriptStoreRef.current.setMessages(normalizedMessages);
+		const nextPendingInteraction =
+			extractPendingInteraction(normalizedMessages);
+		setPendingInteraction(previousInteraction => {
+			if (previousInteraction == null && nextPendingInteraction == null) {
+				return previousInteraction;
+			}
+
+			if (
+				previousInteraction != null &&
+				nextPendingInteraction != null &&
+				JSON.stringify(previousInteraction) ===
+					JSON.stringify(nextPendingInteraction)
+			) {
+				return previousInteraction;
+			}
+
+			return nextPendingInteraction;
+		});
 	}, []);
 
 	const runAgent = useCallback(
@@ -526,30 +551,132 @@ export function useAgent(mode: Mode) {
 			reason?: string;
 			overrideMode?: Mode;
 		}) => {
-			const nextMessages = updateToolPartInMessages({
-				messages: messagesRef.current,
-				messageId: options.messageId,
-				toolCallId: options.toolCallId,
-				updater: part => {
-					const {
-						output: _output,
-						errorText: _errorText,
-						resultProviderMetadata: _resultProviderMetadata,
-						preliminary: _preliminary,
-						...basePart
-					} = part as ToolPart & Record<string, unknown>;
+			// Get the current tool part to extract input and tool name
+			const message = messagesRef.current.find(m => m.id === options.messageId);
+			const toolPart = message?.parts.find(
+				(part): part is ToolPart =>
+					isToolUIPart(part) && part.toolCallId === options.toolCallId,
+			);
 
-					return {
-						...basePart,
-						state: 'approval-responded',
-						approval: {
-							id: options.approvalId,
-							approved: options.approved,
-							...(options.reason ? {reason: options.reason} : {}),
+			if (!toolPart) {
+				throw new Error(`Tool part not found: ${options.toolCallId}`);
+			}
+
+			const toolName = getToolName(toolPart);
+			const tool = allTools[toolName as AgentToolName];
+			const input = (toolPart.input ?? {}) as Record<string, unknown>;
+
+			let nextMessages: UIMessage[];
+
+			if (options.approved && tool.execute != null) {
+				// Execute the tool and transition to output-available
+				try {
+					const toolExecutionOptions: ToolExecutionOptions = {
+						toolCallId: options.toolCallId,
+						messages: [],
+						abortSignal: undefined,
+						experimental_context: {mode: options.overrideMode ?? mode},
+					};
+					const output = await tool.execute(input, toolExecutionOptions);
+
+					nextMessages = updateToolPartInMessages({
+						messages: messagesRef.current,
+						messageId: options.messageId,
+						toolCallId: options.toolCallId,
+						updater: part => {
+							const {
+								errorText: _errorText,
+								approval: _approval,
+								resultProviderMetadata: _resultProviderMetadata,
+								preliminary: _preliminary,
+								...basePart
+							} = part as ToolPart & Record<string, unknown>;
+
+							return {
+								...basePart,
+								state: 'output-available',
+								output,
+							} as ToolPart;
 						},
-					} as ToolPart;
-				},
-			});
+					});
+				} catch (error) {
+					// If execution fails, transition to output-error
+					nextMessages = updateToolPartInMessages({
+						messages: messagesRef.current,
+						messageId: options.messageId,
+						toolCallId: options.toolCallId,
+						updater: part => {
+							const {
+								output: _output,
+								approval: _approval,
+								resultProviderMetadata: _resultProviderMetadata,
+								preliminary: _preliminary,
+								...basePart
+							} = part as ToolPart & Record<string, unknown>;
+
+							return {
+								...basePart,
+								state: 'output-error',
+								errorText: getErrorMessage(error),
+							} as ToolPart;
+						},
+					});
+				}
+			} else if (options.approved) {
+				// Approved but no execute function - transition to output-error
+				// This shouldn't happen for tools with needsApproval, but handle gracefully
+				nextMessages = updateToolPartInMessages({
+					messages: messagesRef.current,
+					messageId: options.messageId,
+					toolCallId: options.toolCallId,
+					updater: part => {
+						const {
+							output: _output,
+							approval: _approval,
+							resultProviderMetadata: _resultProviderMetadata,
+							preliminary: _preliminary,
+							...basePart
+						} = part as ToolPart & Record<string, unknown>;
+
+						return {
+							...basePart,
+							state: 'output-error',
+							errorText: options.reason ?? 'Tool execution not available',
+							approval: {
+								id: options.approvalId,
+								approved: true,
+								reason: options.reason ?? 'Tool execution not available',
+							},
+						} as ToolPart;
+					},
+				});
+			} else {
+				// Denied - transition to output-denied
+				nextMessages = updateToolPartInMessages({
+					messages: messagesRef.current,
+					messageId: options.messageId,
+					toolCallId: options.toolCallId,
+					updater: part => {
+						const {
+							output: _output,
+							approval: _approval,
+							resultProviderMetadata: _resultProviderMetadata,
+							preliminary: _preliminary,
+							...basePart
+						} = part as ToolPart & Record<string, unknown>;
+
+						return {
+							...basePart,
+							state: 'output-denied',
+							approval: {
+								id: options.approvalId,
+								approved: false,
+								reason: options.reason ?? 'User denied approval',
+							},
+						} as ToolPart;
+					},
+				});
+			}
 
 			setConversation(nextMessages);
 			await runAgent(nextMessages, options.overrideMode ?? mode);
@@ -591,13 +718,8 @@ export function useAgent(mode: Mode) {
 		[mode, runAgent, setConversation],
 	);
 
-	const pendingInteraction = useMemo(
-		() => extractPendingInteraction(messages),
-		[messages],
-	);
-
 	return {
-		messages,
+		transcriptStore: transcriptStoreRef.current,
 		isLoading,
 		error,
 		sendMessage,

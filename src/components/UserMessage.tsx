@@ -18,7 +18,7 @@ function UserMessage({msg}: {msg: any}) {
 			key={msg.id}
 			flexDirection="row"
 			borderStyle="round"
-			borderDimColor={true}
+			borderColor='grey'
 			borderLeft={false}
 			borderRight={false}
 		>

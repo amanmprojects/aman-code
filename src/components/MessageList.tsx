@@ -1,116 +1,77 @@
 import React, {memo} from 'react';
 import {Box} from 'ink';
-import type {UIMessage} from 'ai';
 import AssistantMessage from './AssistantMessage.js';
 import UserMessage from './UserMessage.js';
+import {
+	type TranscriptStore,
+	useTranscriptMessage,
+	useTranscriptMessageIds,
+} from '../state/transcriptStore.js';
 
 interface MessageListProps {
-	messages: UIMessage[];
+	transcriptStore: TranscriptStore;
+	messageIds?: string[];
+	streamingMessageId?: string;
+	streamingAssistantTailLines?: number;
 }
 
-function equalPart(
-	prevPart: UIMessage['parts'][number],
-	nextPart: UIMessage['parts'][number],
-): boolean {
-	if (prevPart?.type !== nextPart?.type) {
-		return false;
-	}
-
-	if (prevPart?.type === 'text' && nextPart?.type === 'text') {
-		return prevPart.text === nextPart.text;
-	}
-
-	if (
-		prevPart?.type?.startsWith('tool-') &&
-		nextPart?.type?.startsWith('tool-')
-	) {
-		const prevToolPart = prevPart as Record<string, unknown>;
-		const nextToolPart = nextPart as Record<string, unknown>;
-		return (
-			prevToolPart['state'] === nextToolPart['state'] &&
-			prevToolPart['toolCallId'] === nextToolPart['toolCallId'] &&
-			prevToolPart['toolName'] === nextToolPart['toolName'] &&
-			JSON.stringify(prevToolPart['input']) ===
-				JSON.stringify(nextToolPart['input']) &&
-			JSON.stringify(prevToolPart['output']) ===
-				JSON.stringify(nextToolPart['output']) &&
-			JSON.stringify(prevToolPart['approval']) ===
-				JSON.stringify(nextToolPart['approval']) &&
-			prevToolPart['errorText'] === nextToolPart['errorText']
-		);
-	}
-
-	return JSON.stringify(prevPart) === JSON.stringify(nextPart);
-}
-
-function equalMessage(prevMessage: UIMessage, nextMessage: UIMessage): boolean {
-	if (
-		prevMessage.id !== nextMessage.id ||
-		prevMessage.role !== nextMessage.role
-	) {
-		return false;
-	}
-
-	if (prevMessage.parts.length !== nextMessage.parts.length) {
-		return false;
-	}
-
-	for (let index = 0; index < prevMessage.parts.length; index += 1) {
-		const prevPart = prevMessage.parts[index]!;
-		const nextPart = nextMessage.parts[index]!;
-		if (!equalPart(prevPart, nextPart)) {
-			return false;
-		}
-	}
-
-	return true;
-}
-
-function equalMessages(
-	prevMessages: UIMessage[],
-	nextMessages: UIMessage[],
-): boolean {
-	if (prevMessages.length !== nextMessages.length) {
-		return false;
-	}
-
-	for (let index = 0; index < prevMessages.length; index += 1) {
-		const prevMessage = prevMessages[index]!;
-		const nextMessage = nextMessages[index]!;
-		if (!equalMessage(prevMessage, nextMessage)) {
-			return false;
-		}
-	}
-
-	return true;
+interface MessageRowProps {
+	id: string;
+	transcriptStore: TranscriptStore;
+	tailLines?: number;
 }
 
 /**
  * Renders a vertical list of chat messages.
  *
- * Each message is rendered as a UserMessage when `role === 'user'` and as an
- * AssistantMessage for other roles. The React key for each message is
- * `msg.id.trim()` if non-empty, otherwise `${msg.role}-${index}`.
+ * Each row subscribes to a single message by id so large streaming tool updates
+ * don't force the entire transcript through deep equality checks on every chunk.
  *
- * @param messages - The array of messages to render
+ * @param transcriptStore - External message store used to subscribe to message ids
+ * and individual messages
  * @returns A JSX element containing the messages arranged vertically
  */
-function MessageList({messages}: MessageListProps) {
+const MessageRow = memo(function MessageRow({
+	id,
+	transcriptStore,
+	tailLines,
+}: MessageRowProps) {
+	const message = useTranscriptMessage(transcriptStore, id);
+
+	if (message == null) {
+		return null;
+	}
+
+	if (message.role === 'user') {
+		return <UserMessage msg={message} />;
+	}
+
+	return <AssistantMessage message={message} tailLines={tailLines} />;
+});
+
+function MessageList({
+	transcriptStore,
+	messageIds,
+	streamingMessageId,
+	streamingAssistantTailLines,
+}: MessageListProps) {
+	const storeMessageIds = useTranscriptMessageIds(transcriptStore);
+	const visibleMessageIds = messageIds ?? storeMessageIds;
+
 	return (
 		<Box flexDirection="column">
-			{messages.map((msg, index) => {
-				const messageKey = msg.id.trim() || `${msg.role}-${index}`;
-
-				if (msg.role === 'user') {
-					return <UserMessage key={messageKey} msg={msg} />;
-				}
-
-				return <AssistantMessage key={messageKey} message={msg} />;
-			})}
+			{visibleMessageIds.map(id => (
+				<MessageRow
+					key={id}
+					id={id}
+					transcriptStore={transcriptStore}
+					tailLines={
+						id === streamingMessageId ? streamingAssistantTailLines : undefined
+					}
+				/>
+			))}
 		</Box>
 	);
 }
 
-export default memo(MessageList, (prevProps, nextProps) =>
-	equalMessages(prevProps.messages, nextProps.messages),
-);
+export default memo(MessageList);

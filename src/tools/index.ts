@@ -10,7 +10,7 @@ import {webSearch} from './webSearch.js';
 import {askUserQuestion} from './askUserQuestion.js';
 import {exitPlanMode} from './exitPlanMode.js';
 import {todoWrite} from './todoWrite.js';
-import {tool} from 'ai';
+import {tool, type Tool, type ToolExecutionOptions} from 'ai';
 import {z} from 'zod';
 import type {Mode} from '../utils/permissions.js';
 
@@ -29,9 +29,26 @@ export {
 	todoWrite,
 };
 
-const executeCommandWithModeSafety = tool({
+type AgentTool = Tool<any, any>;
+
+type AgentToolSet = {
+	readFile: AgentTool;
+	writeFile: AgentTool;
+	editFile: AgentTool;
+	executeCommand: AgentTool;
+	grepSearch: AgentTool;
+	globSearch: AgentTool;
+	listDir: AgentTool;
+	toolSearch: AgentTool;
+	webSearch: AgentTool;
+	askUserQuestion: AgentTool;
+	exitPlanMode: AgentTool;
+	todoWrite: AgentTool;
+};
+
+const executeCommandWithModeSafety: AgentTool = tool({
 	description:
-		(executeCommand as any).description ??
+		executeCommand.description ??
 		'Execute a shell command and return its output.',
 	inputSchema: z.object({
 		command: z.string().describe('The shell command to execute'),
@@ -53,7 +70,7 @@ const executeCommandWithModeSafety = tool({
 			maxOutputChars?: number;
 			background?: boolean;
 		},
-		toolOptions: {experimental_context?: unknown},
+		toolOptions: ToolExecutionOptions,
 	) => {
 		const context = toolOptions.experimental_context as
 			| {mode?: Mode}
@@ -71,11 +88,18 @@ const executeCommandWithModeSafety = tool({
 			};
 		}
 
-		return (executeCommand as any).execute(args, toolOptions);
+		if (executeCommand.execute == null) {
+			return {
+				error:
+					'Command execution tool is unavailable in the current installation.',
+			};
+		}
+
+		return executeCommand.execute(args, toolOptions);
 	},
 });
 
-export const allTools = {
+export const allTools: AgentToolSet = {
 	readFile,
 	writeFile,
 	editFile,
@@ -90,4 +114,4 @@ export const allTools = {
 	todoWrite,
 };
 
-export type AgentToolName = keyof typeof allTools;
+export type AgentToolName = keyof AgentToolSet;
