@@ -6,14 +6,8 @@ import 'dotenv/config';
 import { modelList } from './modelList.js';
 
 export function createAgent(mode: Mode) {
-	const defaultModel = modelList[0];
-
-	if (!defaultModel) {
-		throw new Error('No language model configured');
-	}
-
 	return new ToolLoopAgent({
-		model: defaultModel,
+		model: modelList[0],
 		instructions: systemPrompt,
 		tools: getToolsForMode(mode),
 	});
