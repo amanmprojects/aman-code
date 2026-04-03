@@ -1,4 +1,16 @@
 import type {Mode} from '../utils/permissions.js';
+import {getReadFileDescription} from './ReadFile/prompt.js';
+import {getWriteFileDescription} from './WriteFile/prompt.js';
+import {getEditFileDescription} from './EditFile/prompt.js';
+import {getExecuteCommandDescription} from './ExecuteCommand/prompt.js';
+import {getGrepSearchDescription} from './GrepSearch/prompt.js';
+import {getGlobSearchDescription} from './GlobSearch/prompt.js';
+import {getListDirDescription} from './ListDir/prompt.js';
+import {getToolSearchDescription} from './ToolSearch/prompt.js';
+import {getWebSearchDescription} from './WebSearch/prompt.js';
+import {getAskUserQuestionDescription} from './AskUserQuestion/prompt.js';
+import {getExitPlanModeDescription} from './ExitPlanMode/prompt.js';
+import {getTodoWriteDescription} from './TodoWrite/prompt.js';
 
 export type ToolMetadata = {
 	description: string;
@@ -23,76 +35,64 @@ export type ToolName =
 
 export const toolMetadata = {
 	readFile: {
-		description:
-			'Read the contents of a file at the specified path. Returns the file contents with line numbers. Use this to understand existing code before making changes.',
+		description: getReadFileDescription(),
 		readOnly: true,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
 	writeFile: {
-		description:
-			'Create a new file or overwrite an existing file when explicitly allowed. Use editFile for partial modifications instead.',
+		description: getWriteFileDescription(),
 		readOnly: false,
 		allowedModes: ['code', 'yolo'],
 	},
 	editFile: {
-		description:
-			'Make a targeted edit to a file by replacing an exact string match with new content. The oldString must match exactly, including whitespace and indentation.',
+		description: getEditFileDescription(),
 		readOnly: false,
 		allowedModes: ['code', 'yolo'],
 	},
 	executeCommand: {
-		description:
-			'Execute a shell command and return its output. Supports bounded output, optional background execution, and timeout controls.',
+		description: getExecuteCommandDescription(),
 		readOnly: false,
 		allowedModes: ['code', 'yolo'],
 	},
 	grepSearch: {
-		description:
-			'A powerful search tool built on ripgrep. Search for a pattern across files with support for content results, context lines, pagination, and path filtering.',
+		description: getGrepSearchDescription(),
 		readOnly: true,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
 	globSearch: {
-		description:
-			'Fast file pattern matching across the codebase with glob filters, exclusions, pagination, and depth limits.',
+		description: getGlobSearchDescription(),
 		readOnly: true,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
 	listDir: {
-		description:
-			'List the files and directories inside a directory, including lightweight metadata like entry type and size.',
+		description: getListDirDescription(),
 		readOnly: true,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
 	toolSearch: {
-		description:
-			'Search the available tools by name, description, mode support, or interaction style to discover the right capability to use.',
+		description: getToolSearchDescription(),
 		readOnly: true,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
 	webSearch: {
-		description:
-			'Search the web for up-to-date information using Tavily and return relevant results with snippets and source URLs.',
+		description: getWebSearchDescription(),
 		readOnly: true,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
 	askUserQuestion: {
-		description:
-			'Ask the user a structured question with predefined options and wait for a selection before continuing.',
+		description: getAskUserQuestionDescription(),
 		readOnly: true,
 		interactive: true,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
 	exitPlanMode: {
-		description:
-			'Ask the user to confirm leaving plan mode and beginning implementation work.',
+		description: getExitPlanModeDescription(),
 		readOnly: true,
 		interactive: true,
 		allowedModes: ['plan'],
 	},
 	todoWrite: {
-		description:
-			'Create or update a structured todo list so the agent can track multi-step work with explicit status and priority fields.',
+		description: getTodoWriteDescription(),
 		readOnly: false,
 		allowedModes: ['plan', 'code', 'yolo'],
 	},
