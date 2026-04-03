@@ -248,7 +248,7 @@ export const grepSearch = tool({
 			}
 
 			// Case sensitivity (default is case-sensitive)
-			if (!caseSensitive) {
+			if (caseSensitive === false) {
 				args.push('-i'); // --ignore-case
 			}
 
@@ -331,8 +331,16 @@ export const grepSearch = tool({
 				);
 
 				const finalLines = limitedLines.map((line) => {
-					// Lines have format: /absolute/path:line_content or /absolute/path:num:content
-					const colonIndex = line.indexOf(':');
+					// Lines have format: path:line_content or path:num:content
+					// Use regex to find the colon before line number to handle Windows paths like C:\path\file:10:content
+					const match = line.match(/^(.+?):(?=\d+:)/);
+					if (match) {
+						const filePath = match[1]!;
+						const rest = line.substring(filePath.length);
+						return toRelativePath(filePath) + rest;
+					}
+					// Fallback: try lastIndexOf for simple cases (e.g., count mode output)
+					const colonIndex = line.lastIndexOf(':');
 					if (colonIndex > 0) {
 						const filePath = line.substring(0, colonIndex);
 						const rest = line.substring(colonIndex);
