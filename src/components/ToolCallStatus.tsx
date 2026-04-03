@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import type { UIMessage } from 'ai';
@@ -75,7 +75,42 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 		case 'exitPlanMode':
 			return <Text dimColor>{result.message ?? 'Plan exit approved.'}</Text>;
 		case 'todoWrite':
-			return <Text dimColor>{result.count ?? 0} todo item(s) saved</Text>;
+			if (!result.todos || !Array.isArray(result.todos)) {
+				return <Text dimColor>{result.count ?? 0} todo item(s) saved</Text>;
+			}
+			return (
+				<Box flexDirection="column">
+					<Text dimColor>{result.todos.length} todo item(s):</Text>
+					{result.todos.map((todo: any) => {
+						const statusIcon =
+							todo.status === 'completed'
+								? '✓'
+								: todo.status === 'in_progress'
+									? '▶'
+									: '○';
+						const priorityColor =
+							todo.priority === 'high'
+								? 'red'
+								: todo.priority === 'medium'
+									? 'yellow'
+									: 'dimColor';
+						const statusColor =
+							todo.status === 'completed'
+								? 'green'
+								: todo.status === 'in_progress'
+									? 'cyan'
+									: 'dimColor';
+						return (
+							<Box key={todo.id} marginLeft={2}>
+								<Text color={statusColor}>{statusIcon}</Text>
+								<Text> </Text>
+								<Text color={priorityColor}>[{todo.priority}]</Text>
+								<Text> {todo.content}</Text>
+							</Box>
+						);
+					})}
+				</Box>
+			);
 		case 'editFile':
 			if (result.diff) {
 				return <DiffView diff={result.diff} />;
@@ -182,7 +217,7 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 	}
 }
 
-export default function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
+function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
 	const toolName = toolPart.type === 'dynamic-tool' ? toolPart.toolName : toolPart.type.slice(5);
 	const icon = TOOL_ICONS[toolName] ?? '🔨';
 	const args = (toolPart.input ?? {}) as Record<string, any>;
@@ -248,3 +283,15 @@ export default function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
 		</Box>
 	);
 }
+
+// Memoize to prevent re-renders when parent updates but toolPart hasn't changed
+export default memo(ToolCallStatus, (prevProps, nextProps) => {
+	// Only re-render if state or output changes
+	return (
+		prevProps.toolPart.state === nextProps.toolPart.state &&
+		prevProps.toolPart.toolCallId === nextProps.toolPart.toolCallId &&
+		// For output-available state, also check if output changed
+		(prevProps.toolPart.state !== 'output-available' ||
+			JSON.stringify(prevProps.toolPart.output) === JSON.stringify(nextProps.toolPart.output))
+	);
+});
