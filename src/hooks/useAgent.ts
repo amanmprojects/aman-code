@@ -2,7 +2,7 @@ import {useState, useCallback, useRef} from 'react';
 import {createAgent} from '../agent/index.js';
 import type {Mode} from '../utils/permissions.js';
 import {getAllowedToolNames} from '../utils/permissions.js';
-import type {AgentToolName} from '../tools/index.js';
+import {allTools, type AgentToolName} from '../tools/index.js';
 import {
 	createAgentUIStream,
 	isToolUIPart,
@@ -549,30 +549,129 @@ export function useAgent(mode: Mode) {
 			reason?: string;
 			overrideMode?: Mode;
 		}) => {
-			const nextMessages = updateToolPartInMessages({
-				messages: messagesRef.current,
-				messageId: options.messageId,
-				toolCallId: options.toolCallId,
-				updater: part => {
-					const {
-						output: _output,
-						errorText: _errorText,
-						resultProviderMetadata: _resultProviderMetadata,
-						preliminary: _preliminary,
-						...basePart
-					} = part as ToolPart & Record<string, unknown>;
+			// Get the current tool part to extract input and tool name
+			const message = messagesRef.current.find(m => m.id === options.messageId);
+			const toolPart = message?.parts.find(
+				(part): part is ToolPart =>
+					isToolUIPart(part) && part.toolCallId === options.toolCallId,
+			);
 
-					return {
-						...basePart,
-						state: 'approval-responded',
-						approval: {
-							id: options.approvalId,
-							approved: options.approved,
-							...(options.reason ? {reason: options.reason} : {}),
+			if (!toolPart) {
+				throw new Error(`Tool part not found: ${options.toolCallId}`);
+			}
+
+			const toolName = getToolName(toolPart);
+			const tool = allTools[toolName as AgentToolName];
+			const input = (toolPart.input ?? {}) as Record<string, unknown>;
+
+			let nextMessages: UIMessage[];
+
+			if (options.approved && tool && 'execute' in tool && tool.execute) {
+				// Execute the tool and transition to output-available
+				try {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const output = await (tool as any).execute(input, {
+						abortSignal: undefined,
+						experimental_context: {mode: options.overrideMode ?? mode},
+					});
+
+					nextMessages = updateToolPartInMessages({
+						messages: messagesRef.current,
+						messageId: options.messageId,
+						toolCallId: options.toolCallId,
+						updater: part => {
+							const {
+								errorText: _errorText,
+								approval: _approval,
+								resultProviderMetadata: _resultProviderMetadata,
+								preliminary: _preliminary,
+								...basePart
+							} = part as ToolPart & Record<string, unknown>;
+
+							return {
+								...basePart,
+								state: 'output-available',
+								output,
+							} as ToolPart;
 						},
-					} as ToolPart;
-				},
-			});
+					});
+				} catch (error) {
+					// If execution fails, transition to output-error
+					nextMessages = updateToolPartInMessages({
+						messages: messagesRef.current,
+						messageId: options.messageId,
+						toolCallId: options.toolCallId,
+						updater: part => {
+							const {
+								output: _output,
+								approval: _approval,
+								resultProviderMetadata: _resultProviderMetadata,
+								preliminary: _preliminary,
+								...basePart
+							} = part as ToolPart & Record<string, unknown>;
+
+							return {
+								...basePart,
+								state: 'output-error',
+								errorText: getErrorMessage(error),
+							} as ToolPart;
+						},
+					});
+				}
+			} else if (options.approved) {
+				// Approved but no execute function - transition to output-denied
+				// This shouldn't happen for tools with needsApproval, but handle gracefully
+				nextMessages = updateToolPartInMessages({
+					messages: messagesRef.current,
+					messageId: options.messageId,
+					toolCallId: options.toolCallId,
+					updater: part => {
+						const {
+							output: _output,
+							approval: _approval,
+							resultProviderMetadata: _resultProviderMetadata,
+							preliminary: _preliminary,
+							...basePart
+						} = part as ToolPart & Record<string, unknown>;
+
+						return {
+							...basePart,
+							state: 'output-denied',
+							approval: {
+								id: options.approvalId,
+								approved: false,
+								reason: options.reason ?? 'Tool execution not available',
+							},
+						} as ToolPart;
+					},
+				});
+			} else {
+				// Denied - transition to output-denied
+				nextMessages = updateToolPartInMessages({
+					messages: messagesRef.current,
+					messageId: options.messageId,
+					toolCallId: options.toolCallId,
+					updater: part => {
+						const {
+							output: _output,
+							approval: _approval,
+							resultProviderMetadata: _resultProviderMetadata,
+							preliminary: _preliminary,
+							...basePart
+						} = part as ToolPart & Record<string, unknown>;
+
+						return {
+							...basePart,
+							state: 'output-denied',
+							approval: {
+								id: options.approvalId,
+								approved: false,
+								reason: options.reason ?? 'User denied approval',
+							},
+						} as ToolPart;
+					},
+				});
+			}
 
 			setConversation(nextMessages);
 			await runAgent(nextMessages, options.overrideMode ?? mode);
