@@ -1,6 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { createAgent } from '../agent/index.js';
 import type { Mode } from '../utils/permissions.js';
+import { getAllowedToolNames } from '../utils/permissions.js';
+import type { AgentToolName } from '../tools/index.js';
 import { createAgentUIStream, readUIMessageStream, type UIMessage } from 'ai';
 
 let msgCounter = 0;
@@ -71,26 +73,8 @@ export function useAgent(mode: Mode) {
 	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const agentRef = useRef(createAgent(mode));
-	const agentModeRef = useRef<Mode>(mode);
+	const agentRef = useRef(createAgent());
 	const messagesRef = useRef<UIMessage[]>([]);
-
-	const ensureAgentMode = useCallback(() => {
-		if (agentModeRef.current === mode) {
-			return;
-		}
-
-		agentRef.current = createAgent(mode);
-		agentModeRef.current = mode;
-	}, [mode]);
-
-	useEffect(() => {
-		if (isLoading) {
-			return;
-		}
-
-		ensureAgentMode();
-	}, [isLoading, ensureAgentMode]);
 
 	const setConversation = useCallback((nextMessages: UIMessage[]) => {
 		const normalizedMessages = normalizeMessages(nextMessages, messagesRef.current);
@@ -102,16 +86,20 @@ export function useAgent(mode: Mode) {
 		setError(null);
 		setIsLoading(true);
 
+		const activeTools = [...getAllowedToolNames(mode)] as AgentToolName[];
+
 		const userMessage = createUserMessage(text);
 		const baseMessages = [...messagesRef.current, userMessage];
 		setConversation(baseMessages);
 
 		try {
-			ensureAgentMode();
-
 			const stream = await createAgentUIStream({
 				agent: agentRef.current,
 				uiMessages: baseMessages,
+				options: {
+					activeTools,
+					mode,
+				},
 			});
 
 			let finalMessages = baseMessages;
@@ -133,7 +121,7 @@ export function useAgent(mode: Mode) {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [ensureAgentMode, setConversation]);
+	}, [mode, setConversation]);
 
 	return { messages, isLoading, error, sendMessage };
 }
