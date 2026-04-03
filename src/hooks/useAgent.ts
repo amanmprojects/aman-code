@@ -1,4 +1,4 @@
-import {useState, useCallback, useMemo, useRef} from 'react';
+import {useState, useCallback, useRef} from 'react';
 import {createAgent} from '../agent/index.js';
 import type {Mode} from '../utils/permissions.js';
 import {getAllowedToolNames} from '../utils/permissions.js';
@@ -11,6 +11,10 @@ import {
 } from 'ai';
 import {formatUiPerfDuration, logUiPerf} from '../utils/uiPerf.js';
 import {getErrorMessage, classifyError} from '../utils/errorClassification.js';
+import {
+	createTranscriptStore,
+	type TranscriptStore,
+} from '../state/transcriptStore.js';
 
 type ToolPart = Extract<UIMessage['parts'][number], {toolCallId: string}>;
 
@@ -338,10 +342,12 @@ function extractPendingInteraction(
  *  - `submitToolOutput(options)`: submit tool output for a tool UI part and rerun the agent
  */
 export function useAgent(mode: Mode) {
-	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [pendingInteraction, setPendingInteraction] =
+		useState<PendingInteraction | null>(null);
 	const agentRef = useRef(createAgent());
+	const transcriptStoreRef = useRef<TranscriptStore>(createTranscriptStore());
 	const messagesRef = useRef<UIMessage[]>([]);
 	const agentRunIdRef = useRef(0);
 	const agentAbortRef = useRef<AbortController | null>(null);
@@ -352,7 +358,24 @@ export function useAgent(mode: Mode) {
 			messagesRef.current,
 		);
 		messagesRef.current = normalizedMessages;
-		setMessages(normalizedMessages);
+		transcriptStoreRef.current.setMessages(normalizedMessages);
+		const nextPendingInteraction = extractPendingInteraction(normalizedMessages);
+		setPendingInteraction(previousInteraction => {
+			if (previousInteraction == null && nextPendingInteraction == null) {
+				return previousInteraction;
+			}
+
+			if (
+				previousInteraction != null &&
+				nextPendingInteraction != null &&
+				JSON.stringify(previousInteraction) ===
+					JSON.stringify(nextPendingInteraction)
+			) {
+				return previousInteraction;
+			}
+
+			return nextPendingInteraction;
+		});
 	}, []);
 
 	const runAgent = useCallback(
@@ -591,13 +614,8 @@ export function useAgent(mode: Mode) {
 		[mode, runAgent, setConversation],
 	);
 
-	const pendingInteraction = useMemo(
-		() => extractPendingInteraction(messages),
-		[messages],
-	);
-
 	return {
-		messages,
+		transcriptStore: transcriptStoreRef.current,
 		isLoading,
 		error,
 		sendMessage,

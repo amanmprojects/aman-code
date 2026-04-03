@@ -1,5 +1,6 @@
 import React, {memo, useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
+import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import InteractivePrompt from './InteractivePrompt.js';
 import type {PendingInteraction} from '../hooks/useAgent.js';
@@ -96,7 +97,7 @@ function ComposerPanel({
 			borderRight={false}
 			flexDirection="row"
 		>
-			<Text> ❯ </Text>
+			<Text>{isLoading ? <> <Spinner type="dots" /> </> : ' ❯ '}</Text>
 			<TextInput
 				value={input}
 				onChange={handleChange}

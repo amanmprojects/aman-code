@@ -1,40 +1,43 @@
-import React, {memo} from 'react';
+import React from 'react';
 import {Box, Text} from 'ink';
-import Spinner from 'ink-spinner';
-import type {UIMessage} from 'ai';
 import MessageList from './MessageList.js';
+import {
+	type TranscriptStore,
+	useTranscriptMessageIds,
+} from '../state/transcriptStore.js';
 
 interface ConversationPanelProps {
-	messages: UIMessage[];
+	transcriptStore: TranscriptStore;
 	isLoading: boolean;
 	error: string | null;
 }
 
+const STREAMING_VISIBLE_ASSISTANT_LINES = 28;
+
 function ConversationPanel({
-	messages,
+	transcriptStore,
 	isLoading,
 	error,
 }: ConversationPanelProps) {
+	const messageIds = useTranscriptMessageIds(transcriptStore);
+	const streamingMessageId = isLoading ? messageIds.at(-1) : undefined;
+
 	return (
-		<>
-			<MessageList messages={messages} />
-
-			{isLoading && messages.length > 0 && (
-				<Box marginBottom={1} marginTop={1} marginLeft={1}>
-					<Text color="yellow">
-						<Spinner type="dots" />
-					</Text>
-					<Text dimColor> Thinking...</Text>
-				</Box>
-			)}
-
+		<Box flexDirection="column">
+			<MessageList
+				transcriptStore={transcriptStore}
+				streamingMessageId={streamingMessageId}
+				streamingAssistantTailLines={
+					isLoading ? STREAMING_VISIBLE_ASSISTANT_LINES : undefined
+				}
+			/>
 			{error && (
 				<Box marginBottom={1} marginTop={1}>
 					<Text color="red">Error: {error}</Text>
 				</Box>
 			)}
-		</>
+		</Box>
 	);
 }
 
-export default memo(ConversationPanel);
+export default ConversationPanel;

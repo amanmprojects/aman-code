@@ -6,6 +6,16 @@ import {isToolUIPart, type UIMessage} from 'ai';
 
 interface AssistantMessageProps {
 	message: UIMessage;
+	tailLines?: number;
+}
+
+function trimToTailLines(text: string, tailLines: number) {
+	const lines = text.split('\n');
+	if (lines.length <= tailLines) {
+		return text;
+	}
+
+	return lines.slice(-tailLines).join('\n');
 }
 
 /**
@@ -14,15 +24,31 @@ interface AssistantMessageProps {
  * @param message - The `UIMessage` whose `parts` are rendered into Ink components
  * @returns The rendered assistant message as an Ink/React element
  */
-function AssistantMessage({message}: AssistantMessageProps) {
+function AssistantMessage({message, tailLines}: AssistantMessageProps) {
 	return (
 		<Box flexDirection="column" marginBottom={1}>
 			{message.parts.map((part, i) => {
 				if (part.type === 'text' && part.text) {
+					const trimmedText =
+						tailLines == null
+							? part.text
+							: trimToTailLines(part.text, tailLines);
+
 					return (
-						<Box key={`text-${i}`} marginLeft={1} marginTop={1}>
-							<Markdown cacheKey={`${message.id}:text:${i}`}>
-								{part.text}
+						<Box
+							key={`text-${i}`}
+							marginLeft={1}
+							marginTop={1}
+							flexDirection="column"
+						>
+							<Markdown
+								cacheKey={
+									tailLines == null
+										? `${message.id}:text:${i}`
+										: `${message.id}:text:${i}:tail:${tailLines}`
+								}
+							>
+								{trimmedText}
 							</Markdown>
 						</Box>
 					);
