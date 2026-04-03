@@ -34,7 +34,7 @@ export default function App({ mode = 'code' }: AppProps) {
 	return (
 		<Box flexDirection="column" paddingTop={0}>
 			{/* Header */}
-			<Box marginBottom={1} flexDirection="column" height={9} flexShrink={0}>
+			<Box marginBottom={1} flexDirection="column" height={12} flexShrink={0}>
 				<Divider />
 				<BigText text="aman-code" />
 				<Divider />

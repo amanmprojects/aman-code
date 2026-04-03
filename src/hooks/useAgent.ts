@@ -90,12 +90,12 @@ export function useAgent(mode: Mode) {
 					}
 
 					case 'tool-call': {
-						const existing = toolCalls.get((part as any).toolCallId);
+						const existing = toolCalls.get(part.toolCallId);
 						if (existing) {
-							toolCalls.set((part as any).toolCallId, {
+							toolCalls.set(part.toolCallId, {
 								...existing,
 								state: 'input-available',
-								input: (part as any).input,
+								input: part.input,
 							} as DynamicToolUIPart);
 						}
 
@@ -104,12 +104,12 @@ export function useAgent(mode: Mode) {
 					}
 
 					case 'tool-result': {
-						const tc = toolCalls.get((part as any).toolCallId);
+						const tc = toolCalls.get(part.toolCallId);
 						if (tc) {
-							toolCalls.set((part as any).toolCallId, {
+							toolCalls.set(part.toolCallId, {
 								...tc,
 								state: 'output-available',
-								output: (part as any).output,
+								output: part.output,
 							} as DynamicToolUIPart);
 						}
 
@@ -118,13 +118,13 @@ export function useAgent(mode: Mode) {
 					}
 
 					case 'tool-error': {
-						const tc2 = toolCalls.get((part as any).toolCallId);
+						const tc2 = toolCalls.get(part.toolCallId);
 						if (tc2) {
-							toolCalls.set((part as any).toolCallId, {
+							toolCalls.set(part.toolCallId, {
 								...tc2,
 								state: 'output-error',
 								input: tc2.input,
-								errorText: String((part as any).error ?? 'Tool execution failed'),
+								errorText: String(part.error ?? 'Tool execution failed'),
 							} as DynamicToolUIPart);
 						}
 
