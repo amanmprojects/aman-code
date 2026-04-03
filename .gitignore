@@ -9,3 +9,4 @@ dist
 .prettierignore
 
 claude-code-for-inspiration
+.codex
