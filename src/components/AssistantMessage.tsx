@@ -10,9 +10,6 @@ interface AssistantMessageProps {
 export default function AssistantMessage({ message }: AssistantMessageProps) {
 	return (
 		<Box flexDirection="column">
-			<Text color="magenta" bold>
-				{'◆ '}
-			</Text>
 			{message.parts.map((part, i) => {
 				if (part.type === 'text' && part.text) {
 					return (
@@ -22,6 +19,13 @@ export default function AssistantMessage({ message }: AssistantMessageProps) {
 					);
 				}
 
+				if (part.type === 'reasoning') {
+					return (
+						<Box key={`reasoning-${i}`} marginLeft={2}>
+							<Text dimColor>{part.text}</Text>
+						</Box>
+					);
+				}
 
 				if (part.type === 'dynamic-tool') {
 					return (

@@ -44,7 +44,7 @@ export default function App({ mode = 'code' }: AppProps) {
 
 			{/* Loading indicator */}
 			{isLoading && messages.length > 0 && (
-				<Box marginBottom={1}>
+				<Box>
 					<Text color="yellow">
 						<Spinner type="dots" />
 					</Text>
@@ -61,7 +61,7 @@ export default function App({ mode = 'code' }: AppProps) {
 
 			{/* Input */}
 			<Box
-				borderStyle="single"
+				borderStyle="double"
 				borderLeft={false}
 				borderRight={false}
 				flexDirection="row"
