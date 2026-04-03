@@ -4,15 +4,37 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createPatch } from 'diff';
 
+/**
+ * Detects the line ending style used in the given text.
+ *
+ * @param content - Text to inspect for line endings
+ * @returns `'\r\n'` if `content` contains CRLF sequences, `'\n'` otherwise
+ */
 function detectLineEnding(content: string): '\n' | '\r\n' {
 	return content.includes('\r\n') ? '\r\n' : '\n';
 }
 
+/**
+ * Normalize line endings in a string to the specified style.
+ *
+ * @param content - The input text whose line endings will be normalized
+ * @param lineEnding - Target line ending, either `'\n'` or `'\r\n'`
+ * @returns The input string with all line endings converted to the specified `lineEnding`
+ */
 function normalizeLineEndings(content: string, lineEnding: '\n' | '\r\n'): string {
 	const normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 	return lineEnding === '\r\n' ? normalized.replaceAll('\n', '\r\n') : normalized;
 }
 
+/**
+ * Counts the number of non-overlapping literal occurrences of `search` in `content`.
+ *
+ * Uses a literal, case-sensitive search and advances past each match so occurrences that overlap are not counted. If `search` is an empty string, the function returns `0`.
+ *
+ * @param content - The string to search within.
+ * @param search - The substring to count.
+ * @returns The number of non-overlapping occurrences of `search` found in `content`.
+ */
 function countOccurrences(content: string, search: string): number {
 	if (!search) {
 		return 0;

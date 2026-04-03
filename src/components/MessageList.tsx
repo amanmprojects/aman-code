@@ -8,6 +8,16 @@ interface MessageListProps {
 	messages: UIMessage[];
 }
 
+/**
+ * Renders a vertical list of chat messages.
+ *
+ * Each message is rendered as a UserMessage when `role === 'user'` and as an
+ * AssistantMessage for other roles. The React key for each message is
+ * `msg.id.trim()` if non-empty, otherwise `${msg.role}-${index}`.
+ *
+ * @param messages - The array of messages to render
+ * @returns A JSX element containing the messages arranged vertically
+ */
 function MessageList({ messages }: MessageListProps) {
 	return (
 		<Box flexDirection="column">

@@ -20,6 +20,19 @@ const DEFAULT_HEAD_LIMIT = 250;
 // Common directories to exclude
 const EXCLUDED_DIRECTORIES = ['node_modules', 'dist', 'build', '.next', '.cache'];
 
+/**
+ * Returns a paginated slice of an array according to `limit` and `offset`.
+ *
+ * When `limit` is `0` the function treats it as unlimited and returns all items after `offset`.
+ *
+ * @param items - The array to paginate
+ * @param limit - Maximum number of items to return; `0` means unlimited; `undefined` uses `DEFAULT_HEAD_LIMIT`
+ * @param offset - Number of items to skip from the start (default `0`)
+ * @returns An object with:
+ *  - `items`: the sliced subset,
+ *  - `appliedLimit`: the effective limit when truncation occurred, otherwise `undefined`,
+ *  - `wasTruncated`: `true` if there were more items beyond the returned slice, `false` otherwise
+ */
 function applyHeadLimit<T>(
 	items: T[],
 	limit: number | undefined,
@@ -39,6 +52,12 @@ function applyHeadLimit<T>(
 	};
 }
 
+/**
+ * Convert an absolute or relative filesystem path to a path relative to the current working directory when safe to do so.
+ *
+ * @param filePath - The filesystem path to normalize
+ * @returns The input path made relative to `process.cwd()` with POSIX-style separators, or the original `filePath` when a safe relative path cannot be produced
+ */
 function toRelativePath(filePath: string): string {
 	const relativePath = path.relative(process.cwd(), filePath);
 	if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
@@ -47,6 +66,13 @@ function toRelativePath(filePath: string): string {
 	return relativePath.split(path.sep).join('/');
 }
 
+/**
+ * Build a comma-separated description of applied pagination parameters.
+ *
+ * @param appliedLimit - The effective maximum number of items to include; omitted when `undefined`
+ * @param appliedOffset - The effective offset to apply; omitted when falsy (for example, `0` is not included)
+ * @returns A string containing `limit: <appliedLimit>` and/or `offset: <appliedOffset>` separated by `, `, or an empty string if neither is included
+ */
 function formatLimitInfo(
 	appliedLimit: number | undefined,
 	appliedOffset: number | undefined,
@@ -57,7 +83,18 @@ function formatLimitInfo(
 	return parts.join(', ');
 }
 
-// Promisified execFile
+/**
+ * Execute a program using Node's `execFile` and return its captured stdout and stderr.
+ *
+ * Uses UTF-8 encoding and applies the provided `cwd`, `timeout`, and `maxBuffer` options.
+ * Treats an exit code of `1` as a non-error (compatible with ripgrep's "no matches" behavior);
+ * any other `execFile` error causes rejection.
+ *
+ * @param command - The executable to run (e.g., `rg`)
+ * @param args - Argument list passed to the executable
+ * @param options - Execution options: `cwd` to run in, `timeout` in milliseconds, and `maxBuffer` in bytes
+ * @returns An object with `stdout` and `stderr` as UTF-8 strings
+ */
 function execFileAsync(
 	command: string,
 	args: string[],

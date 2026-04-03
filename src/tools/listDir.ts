@@ -15,6 +15,12 @@ type DirectoryEntryResult = {
 	children: number | null;
 };
 
+/**
+ * Produce a display-friendly path: use a path relative to the current working directory with POSIX (`/`) separators when `targetPath` is inside the cwd; otherwise return `targetPath` unchanged.
+ *
+ * @param targetPath - The filesystem path to convert for display
+ * @returns A POSIX-style path relative to `process.cwd()` when `targetPath` is inside it, otherwise the original `targetPath`
+ */
 function toDisplayPath(targetPath: string): string {
 	const relativePath = path.relative(process.cwd(), targetPath);
 	if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
@@ -24,11 +30,23 @@ function toDisplayPath(targetPath: string): string {
 	return relativePath.split(path.sep).join('/');
 }
 
+/**
+ * Counts immediate entries (files, directories, symlinks, etc.) within a directory.
+ *
+ * @param directoryPath - Filesystem path of the directory to inspect
+ * @returns The number of immediate entries inside `directoryPath`
+ */
 async function countChildren(directoryPath: string): Promise<number> {
 	const entries = await fs.readdir(directoryPath);
 	return entries.length;
 }
 
+/**
+ * Classifies a file system entry represented by an fs.Stats-like object.
+ *
+ * @param stat - The object returned by `fs.lstat` for the entry.
+ * @returns The entry type: `file`, `directory`, `symlink`, or `other`.
+ */
 function getEntryType(stat: Awaited<ReturnType<typeof fs.lstat>>): EntryType {
 	if (stat.isFile()) {
 		return 'file';

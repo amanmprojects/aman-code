@@ -2,10 +2,23 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { allToolNames, getToolMetadata, type ToolName } from './toolMetadata.js';
 
+/**
+ * Converts the input string into lowercase alphanumeric tokens.
+ *
+ * @param value - The input string to tokenize.
+ * @returns An array of lowercase tokens consisting of contiguous letters and digits; empty tokens are omitted.
+ */
 function tokenize(value: string): string[] {
 	return value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 
+/**
+ * Compute a relevance score for a tool given a search query.
+ *
+ * @param name - The tool's identifier
+ * @param query - The search text to match against the tool's name and description
+ * @returns A numeric relevance score: `0` if metadata is missing, `1` if `query` is empty after trimming, `100` if the query appears as a full substring of the tool's name+description, otherwise a positive integer derived from token matches (higher is more relevant)
+ */
 function scoreTool(name: ToolName, query: string): number {
 	const metadata = getToolMetadata(name);
 	if (metadata == null) {

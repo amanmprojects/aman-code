@@ -38,6 +38,12 @@ const BINARY_EXTENSIONS = new Set([
 	'wasm', 'class', 'jar', 'o', 'a',
 ]);
 
+/**
+ * Determines whether a resolved filesystem path refers to a blocked device or stdio file descriptor alias.
+ *
+ * @param filePath - The resolved path to check.
+ * @returns `true` if the path is in the blocked-device set or matches Linux `/proc/.../fd/0`, `/proc/.../fd/1`, or `/proc/.../fd/2` patterns; `false` otherwise.
+ */
 function isBlockedDevicePath(filePath: string): boolean {
 	if (BLOCKED_DEVICE_PATHS.has(filePath)) return true;
 	// /proc/self/fd/0-2 and /proc/<pid>/fd/0-2 are Linux aliases for stdio
@@ -51,15 +57,33 @@ function isBlockedDevicePath(filePath: string): boolean {
 	return false;
 }
 
+/**
+ * Detects whether a path is UNC-like.
+ *
+ * @returns `true` if the `filePath` starts with `\\` or `//`, `false` otherwise.
+ */
 function isUNCPath(filePath: string): boolean {
 	return filePath.startsWith('\\\\') || filePath.startsWith('//');
 }
 
+/**
+ * Checks whether a file's extension indicates it should be treated as binary.
+ *
+ * @returns `true` if the file extension (lowercased, without the leading dot) is listed in the binary extensions set, `false` otherwise.
+ */
 function hasBinaryExtension(filePath: string): boolean {
 	const ext = path.extname(filePath).toLowerCase().slice(1);
 	return BINARY_EXTENSIONS.has(ext);
 }
 
+/**
+ * Determines whether a file is likely binary.
+ *
+ * Checks the file's extension against a known binary list and samples the file's first 8KB for null bytes; read errors are suppressed and treated as "not binary".
+ *
+ * @param filePath - Path to the file to inspect
+ * @returns `true` if the file is likely binary (binary extension or contains a null byte within the first 8KB), `false` otherwise.
+ */
 async function isBinaryFile(filePath: string): Promise<boolean> {
 	// Quick check: extension-based
 	if (hasBinaryExtension(filePath)) return true;
@@ -89,6 +113,18 @@ async function isBinaryFile(filePath: string): Promise<boolean> {
 	return false;
 }
 
+/**
+ * Suggests a filename in the same directory as a requested path when the exact target is missing.
+ *
+ * Searches the target's directory for files whose names contain each other or share the same basename
+ * (ignoring extensions). If a similar file is found and resides under `cwd`, returns its relative path
+ * with OS separators normalized to `/`; otherwise returns the similar file's basename. Returns `null`
+ * if no suggestion can be produced or an error occurs while searching.
+ *
+ * @param targetPath - The original (missing) target path to base suggestions on
+ * @param cwd - Current working directory used to produce a relative suggestion when possible
+ * @returns A forward-slash normalized relative path to a similar file under `cwd`, the similar filename if not under `cwd`, or `null` if no suggestion exists
+ */
 async function findSimilarFiles(
 	targetPath: string,
 	cwd: string,
@@ -137,6 +173,13 @@ async function findSimilarFiles(
 	return null;
 }
 
+/**
+ * Provide a normalized forward-slash relative path from `cwd` to `targetPath` when `targetPath` is located under `cwd`.
+ *
+ * @param targetPath - The absolute or relative path to the target file or directory
+ * @param cwd - The base directory used to compute a relative path (typically `process.cwd()`)
+ * @returns The relative path with `/` as separators when `targetPath` is within `cwd`, `null` otherwise
+ */
 function suggestPathUnderCwd(
 	targetPath: string,
 	cwd: string,

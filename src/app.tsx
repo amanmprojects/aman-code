@@ -16,6 +16,15 @@ interface AppProps {
 
 const MODE_ORDER: Mode[] = ['plan', 'code', 'yolo'];
 
+/**
+ * Root Ink React component that manages the chat UI, agent integration, mode switching, and interactive tool prompts.
+ *
+ * Renders messages, a loading indicator, global errors, either an interactive prompt (when a tool interaction is active)
+ * or a free-text input, and a bottom bar showing the current mode and status.
+ *
+ * @param mode - The initial operation mode (`'plan' | 'code' | 'yolo'`). Defaults to `'code'`.
+ * @returns The rendered CLI application UI.
+ */
 export default function App({ mode: initialMode = 'code' }: AppProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [input, setInput] = useState('');

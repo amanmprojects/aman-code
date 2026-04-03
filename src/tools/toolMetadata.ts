@@ -88,10 +88,22 @@ export type ToolName = keyof typeof toolMetadata;
 
 export const allToolNames = Object.keys(toolMetadata) as ToolName[];
 
+/**
+ * Retrieve metadata for a tool by its name.
+ *
+ * @param name - The tool name to look up
+ * @returns The tool's metadata if present, `undefined` otherwise.
+ */
 export function getToolMetadata(name: string): ToolMetadata | undefined {
 	return toolMetadata[name as ToolName];
 }
 
+/**
+ * Get the set of tool names permitted in the given mode.
+ *
+ * @param mode - The mode used to filter tools
+ * @returns A set of tool names whose metadata includes the provided `mode` in `allowedModes`
+ */
 export function getAllowedToolNamesForMode(mode: Mode): Set<ToolName> {
 	return new Set(
 		allToolNames.filter((name) => {
@@ -101,6 +113,11 @@ export function getAllowedToolNamesForMode(mode: Mode): Set<ToolName> {
 	);
 }
 
+/**
+ * Get the set of tool names marked as read-only.
+ *
+ * @returns A `Set` containing the `ToolName` entries whose `readOnly` metadata is `true`.
+ */
 export function getReadOnlyToolNames(): Set<ToolName> {
 	return new Set(
 		allToolNames.filter((name) => {
@@ -110,6 +127,11 @@ export function getReadOnlyToolNames(): Set<ToolName> {
 	);
 }
 
+/**
+ * Determine whether the given tool name is marked as interactive in the tool registry.
+ *
+ * @returns `true` if the tool exists in `toolMetadata` and its `interactive` flag is `true`, `false` otherwise.
+ */
 export function isInteractiveToolName(name: string): boolean {
 	return toolMetadata[name as ToolName]?.interactive === true;
 }
