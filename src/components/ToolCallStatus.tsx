@@ -32,7 +32,7 @@ function formatArgs(toolName: string, args: Record<string, any>): string {
 		case 'grepSearch':
 			return `"${args['pattern'] ?? ''}" in ${args['searchPath'] ?? '.'}`;
 		case 'globSearch':
-			return `"${args['pattern'] ?? ''}" in ${args['searchPath'] ?? '.'}`;
+			return `"${args['pattern'] ?? ''}" in ${args['path'] ?? args['searchPath'] ?? '.'}`;
 		default:
 			return JSON.stringify(args).slice(0, 80);
 	}
@@ -111,10 +111,11 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 			return (
 				<Box flexDirection="column">
 					<Text dimColor>
-						{result.resultCount} result{result.resultCount === 1 ? '' : 's'}
+						{(result.numFiles ?? result.resultCount ?? 0)} result{(result.numFiles ?? result.resultCount ?? 0) === 1 ? '' : 's'}
+						{result.truncated ? ' (truncated)' : ''}
 					</Text>
-					{result.results && (
-						<Text>{(result.results as string[]).slice(0, 10).join('\n')}</Text>
+					{(result.filenames ?? result.results) && (
+						<Text>{((result.filenames ?? result.results) as string[]).slice(0, 10).join('\n')}</Text>
 					)}
 				</Box>
 			);
