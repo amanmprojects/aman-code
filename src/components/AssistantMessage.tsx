@@ -14,7 +14,7 @@ export default function AssistantMessage({ message }: AssistantMessageProps) {
 			{message.parts.map((part, i) => {
 				if (part.type === 'text' && part.text) {
 					return (
-						<Box key={`text-${i}`} marginLeft={2} marginTop={1}>
+						<Box key={`text-${i}`} marginLeft={1} marginTop={1}>
 							<Markdown>{part.text}</Markdown>
 						</Box>
 					);
@@ -22,7 +22,7 @@ export default function AssistantMessage({ message }: AssistantMessageProps) {
 
 				if (part.type === 'reasoning') {
 					return (
-						<Box key={`reasoning-${i}`} marginLeft={2} marginTop={1}>
+						<Box key={`reasoning-${i}`} marginLeft={1} marginTop={1}>
 							<Text color='grey'>{part.text}</Text>
 						</Box>
 					);
@@ -30,7 +30,7 @@ export default function AssistantMessage({ message }: AssistantMessageProps) {
 
 				if (isToolUIPart(part)) {
 					return (
-						<Box key={`tool-${i}`} marginLeft={2} marginTop={1}>
+						<Box key={`tool-${i}`} marginLeft={1} marginTop={1}>
 							<ToolCallStatus toolPart={part} />
 						</Box>
 					);
