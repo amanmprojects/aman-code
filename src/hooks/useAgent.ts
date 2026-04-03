@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { createAgent } from '../agent/index.js';
 import type { Mode } from '../utils/permissions.js';
 import { createAgentUIStream, readUIMessageStream, type UIMessage } from 'ai';
@@ -18,10 +18,14 @@ function getErrorMessage(error: unknown): string {
 	}
 
 	try {
-		return JSON.stringify(error);
+		const result = JSON.stringify(error);
+		if (result !== undefined) {
+			return result;
+		}
 	} catch {
-		return 'Unknown error';
+		// fall through to fallback
 	}
+	return String(error);
 }
 
 function createUserMessage(text: string): UIMessage {
@@ -37,7 +41,17 @@ export function useAgent(mode: Mode) {
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const agentRef = useRef(createAgent(mode));
+	const agentModeRef = useRef<Mode>(mode);
 	const messagesRef = useRef<UIMessage[]>([]);
+
+	useEffect(() => {
+		if (isLoading || agentModeRef.current === mode) {
+			return;
+		}
+
+		agentRef.current = createAgent(mode);
+		agentModeRef.current = mode;
+	}, [mode, isLoading]);
 
 	const setConversation = useCallback((nextMessages: UIMessage[]) => {
 		messagesRef.current = nextMessages;
