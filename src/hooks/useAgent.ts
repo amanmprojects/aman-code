@@ -1,9 +1,44 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { createAgent } from '../agent/index.js';
 import type { Mode } from '../utils/permissions.js';
 import { getAllowedToolNames } from '../utils/permissions.js';
 import type { AgentToolName } from '../tools/index.js';
-import { createAgentUIStream, readUIMessageStream, type UIMessage } from 'ai';
+import { createAgentUIStream, isToolUIPart, readUIMessageStream, type UIMessage } from 'ai';
+
+type ToolPart = Extract<UIMessage['parts'][number], { toolCallId: string }>;
+
+type QuestionOption = {
+	id: string;
+	label: string;
+	description?: string;
+};
+
+type AskUserQuestionInput = {
+	question: string;
+	options: QuestionOption[];
+	allowMultiple?: boolean;
+};
+
+export type PendingInteraction =
+	| {
+		kind: 'approval';
+		messageId: string;
+		toolCallId: string;
+		toolName: string;
+		approvalId: string;
+		question: string;
+		detail?: string;
+		targetMode?: Mode;
+	}
+	| {
+		kind: 'question';
+		messageId: string;
+		toolCallId: string;
+		toolName: 'askUserQuestion';
+		question: string;
+		options: QuestionOption[];
+		allowMultiple: boolean;
+	};
 
 let msgCounter = 0;
 function generateId() {
@@ -69,6 +104,98 @@ function createUserMessage(text: string): UIMessage {
 	};
 }
 
+function getToolName(part: ToolPart): string {
+	return part.type === 'dynamic-tool' ? part.toolName : part.type.slice(5);
+}
+
+function mergeAssistantMessage(baseMessages: UIMessage[], assistantMessage: UIMessage): UIMessage[] {
+	const lastMessage = baseMessages.at(-1);
+	if (lastMessage?.role === 'assistant') {
+		return [...baseMessages.slice(0, -1), assistantMessage];
+	}
+
+	return [...baseMessages, assistantMessage];
+}
+
+function updateToolPartInMessages(options: {
+	messages: UIMessage[];
+	messageId: string;
+	toolCallId: string;
+	updater: (toolPart: ToolPart) => ToolPart;
+}): UIMessage[] {
+	const { messages, messageId, toolCallId, updater } = options;
+
+	return messages.map((message) => {
+		if (message.id !== messageId) {
+			return message;
+		}
+
+		return {
+			...message,
+			parts: message.parts.map((part) => {
+				if (!isToolUIPart(part) || part.toolCallId !== toolCallId) {
+					return part;
+				}
+
+				return updater(part as ToolPart);
+			}),
+		};
+	});
+}
+
+function extractPendingInteraction(messages: UIMessage[]): PendingInteraction | null {
+	for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+		const message = messages[messageIndex];
+		if (message?.role !== 'assistant') {
+			continue;
+		}
+
+		for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
+			const part = message.parts[partIndex];
+			if (part == null || !isToolUIPart(part)) {
+				continue;
+			}
+
+			const toolName = getToolName(part as ToolPart);
+
+			if (part.state === 'approval-requested') {
+				const input = (part.input ?? {}) as Record<string, unknown>;
+				const targetMode = input['targetMode'] === 'yolo' ? 'yolo' : 'code';
+				const detail = typeof input['planSummary'] === 'string' ? input['planSummary'] : undefined;
+
+				return {
+					kind: 'approval',
+					messageId: message.id,
+					toolCallId: part.toolCallId,
+					toolName,
+					approvalId: part.approval.id,
+					question:
+						toolName === 'exitPlanMode'
+							? `Leave plan mode and switch to ${targetMode.toUpperCase()} mode?`
+							: `Approve ${toolName}?`,
+					detail,
+					targetMode,
+				};
+			}
+
+			if (part.state === 'input-available' && toolName === 'askUserQuestion') {
+				const input = part.input as AskUserQuestionInput;
+				return {
+					kind: 'question',
+					messageId: message.id,
+					toolCallId: part.toolCallId,
+					toolName: 'askUserQuestion',
+					question: input.question,
+					options: input.options ?? [],
+					allowMultiple: input.allowMultiple === true,
+				};
+			}
+		}
+	}
+
+	return null;
+}
+
 export function useAgent(mode: Mode) {
 	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
@@ -82,15 +209,11 @@ export function useAgent(mode: Mode) {
 		setMessages(normalizedMessages);
 	}, []);
 
-	const sendMessage = useCallback(async (text: string) => {
+	const runAgent = useCallback(async (baseMessages: UIMessage[], runMode: Mode) => {
 		setError(null);
 		setIsLoading(true);
 
-		const activeTools = [...getAllowedToolNames(mode)] as AgentToolName[];
-
-		const userMessage = createUserMessage(text);
-		const baseMessages = [...messagesRef.current, userMessage];
-		setConversation(baseMessages);
+		const activeTools = [...getAllowedToolNames(runMode)] as AgentToolName[];
 
 		try {
 			const stream = await createAgentUIStream({
@@ -98,7 +221,7 @@ export function useAgent(mode: Mode) {
 				uiMessages: baseMessages,
 				options: {
 					activeTools,
-					mode,
+					mode: runMode,
 				},
 			});
 
@@ -111,7 +234,7 @@ export function useAgent(mode: Mode) {
 				},
 				terminateOnError: true,
 			})) {
-				finalMessages = [...baseMessages, assistantMessage];
+				finalMessages = mergeAssistantMessage(baseMessages, assistantMessage);
 				setConversation(finalMessages);
 			}
 
@@ -121,7 +244,92 @@ export function useAgent(mode: Mode) {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [mode, setConversation]);
+	}, [setConversation]);
 
-	return { messages, isLoading, error, sendMessage };
+	const sendMessage = useCallback(async (text: string) => {
+		const userMessage = createUserMessage(text);
+		const baseMessages = [...messagesRef.current, userMessage];
+		setConversation(baseMessages);
+		await runAgent(baseMessages, mode);
+	}, [mode, runAgent, setConversation]);
+
+	const submitToolApproval = useCallback(async (options: {
+		messageId: string;
+		toolCallId: string;
+		approvalId: string;
+		approved: boolean;
+		reason?: string;
+		overrideMode?: Mode;
+	}) => {
+		const nextMessages = updateToolPartInMessages({
+			messages: messagesRef.current,
+			messageId: options.messageId,
+			toolCallId: options.toolCallId,
+			updater: (part) => {
+				const {
+					output: _output,
+					errorText: _errorText,
+					resultProviderMetadata: _resultProviderMetadata,
+					preliminary: _preliminary,
+					...basePart
+				} = part as ToolPart & Record<string, unknown>;
+
+				return {
+					...basePart,
+					state: 'approval-responded',
+					approval: {
+						id: options.approvalId,
+						approved: options.approved,
+						...(options.reason ? {reason: options.reason} : {}),
+					},
+				} as ToolPart;
+			},
+		});
+
+		setConversation(nextMessages);
+		await runAgent(nextMessages, options.overrideMode ?? mode);
+	}, [mode, runAgent, setConversation]);
+
+	const submitToolOutput = useCallback(async <TOutput,>(options: {
+		messageId: string;
+		toolCallId: string;
+		output: TOutput;
+		overrideMode?: Mode;
+	}) => {
+		const nextMessages = updateToolPartInMessages({
+			messages: messagesRef.current,
+			messageId: options.messageId,
+			toolCallId: options.toolCallId,
+			updater: (part) => {
+				const {
+					errorText: _errorText,
+					approval: _approval,
+					resultProviderMetadata: _resultProviderMetadata,
+					preliminary: _preliminary,
+					...basePart
+				} = part as ToolPart & Record<string, unknown>;
+
+				return {
+					...basePart,
+					state: 'output-available',
+					output: options.output,
+				} as ToolPart;
+			},
+		});
+
+		setConversation(nextMessages);
+		await runAgent(nextMessages, options.overrideMode ?? mode);
+	}, [mode, runAgent, setConversation]);
+
+	const pendingInteraction = useMemo(() => extractPendingInteraction(messages), [messages]);
+
+	return {
+		messages,
+		isLoading,
+		error,
+		sendMessage,
+		pendingInteraction,
+		submitToolApproval,
+		submitToolOutput,
+	};
 }
