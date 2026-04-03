@@ -104,7 +104,7 @@ async function collectMatches(options: {
 		const relativePath = path.relative(rootPath, absolutePath).split(path.sep).join('/');
 		const nextDepth = depth + 1;
 
-		if (maxDepth !== undefined && nextDepth > maxDepth) {
+		if (maxDepth !== undefined && depth > maxDepth) {
 			continue;
 		}
 
