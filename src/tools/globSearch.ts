@@ -2,6 +2,7 @@ import {tool} from 'ai';
 import {z} from 'zod';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
 
 const DEFAULT_LIMIT = 100;
 const EXCLUDED_DIRECTORIES = new Set(['node_modules', '.git', 'dist']);
@@ -272,6 +273,25 @@ export const globSearch = tool({
 			const resolved = requestedPath
 				? path.resolve(requestedPath)
 				: process.cwd();
+
+			if ((requestedPath && isUNCPath(requestedPath)) || isUNCPath(resolved)) {
+				return {
+					error: `Cannot search UNC path: ${
+						requestedPath ?? resolved
+					}. Use a local path instead.`,
+				};
+			}
+
+			if (
+				(requestedPath && isBlockedDevicePath(requestedPath)) ||
+				isBlockedDevicePath(resolved)
+			) {
+				return {
+					error: `Cannot search device path: ${
+						requestedPath ?? resolved
+					}. This path would block or produce infinite output.`,
+				};
+			}
 			const excludePatterns = excludes.map(value => globToRegExp(value));
 			let stats;
 

@@ -96,7 +96,9 @@ function formatArgs(toolName: string, args: Record<string, any>): string {
 		case 'executeCommand':
 			return args['command'] ?? '';
 		case 'grepSearch':
-			return `"${args['pattern'] ?? ''}" in ${args['searchPath'] ?? '.'}`;
+			return `"${args['pattern'] ?? ''}" in ${
+				args['path'] ?? args['searchPath'] ?? '.'
+			}`;
 		case 'globSearch':
 			return `"${args['pattern'] ?? ''}" in ${
 				args['path'] ?? args['searchPath'] ?? '.'

@@ -35,9 +35,9 @@ function scoreTool(name: ToolName, query: string): number {
 
 	const metadataFacets = [
 		metadata.description,
-		String(metadata.interactive === true),
-		String(metadata.readOnly === true),
 		metadata.allowedModes.join(' '),
+		...(metadata.interactive === true ? ['interactive'] : []),
+		...(metadata.readOnly === true ? ['read-only', 'readonly'] : []),
 	];
 	const haystack = `${name} ${metadataFacets.join(' ')}`.toLowerCase();
 	if (haystack.includes(lowerQuery)) {

@@ -1,14 +1,13 @@
 import React, {memo} from 'react';
 import {Box} from 'ink';
+import type {UIMessage} from 'ai';
 import AssistantMessage from './AssistantMessage.js';
 import UserMessage from './UserMessage.js';
-import type {UIMessage} from 'ai';
 
 interface MessageListProps {
 	messages: UIMessage[];
 }
 
-<<<<<<< HEAD
 function equalPart(
 	prevPart: UIMessage['parts'][number],
 	nextPart: UIMessage['parts'][number],

@@ -1,8 +1,12 @@
 const BLOCKED_DEVICE_PATHS = new Set([
+	'/dev/null',
 	'/dev/zero',
 	'/dev/random',
 	'/dev/urandom',
 	'/dev/full',
+	'/dev/mem',
+	'/dev/kmem',
+	'/dev/port',
 	'/dev/stdin',
 	'/dev/tty',
 	'/dev/console',

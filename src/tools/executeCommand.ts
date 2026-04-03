@@ -173,7 +173,6 @@ export const executeCommand = tool({
 			maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
 			background = false,
 		},
-		options,
 	) => {
 		const resolvedCwd = cwd ? path.resolve(cwd) : process.cwd();
 		const classification = classifyCommand(command);
@@ -210,17 +209,19 @@ export const executeCommand = tool({
 					background: true,
 					pid: subprocess.pid,
 					startedAt,
+					stdout: '',
+					stderr: '',
+					exitCode: null,
 				};
 			}
 
-			// Use execa for better cross-platform handling and timeout management
+			// Use execa for streaming output; timeouts are handled manually so treeKill
+			// can reliably terminate child processes across the whole process tree.
 			const execaOptions = {
 				cwd: resolvedCwd,
 				shell: true,
 				env: process.env,
-				timeout: timeoutMs,
 				reject: false, // Never throw, always resolve with result object
-				signal: options.abortSignal,
 				all: true, // Combine stdout and stderr for easier handling
 			};
 
@@ -230,7 +231,6 @@ export const executeCommand = tool({
 			let stdoutTruncated = false;
 			let stderrTruncated = false;
 			let timedOut = false;
-			let aborted = false;
 			let exitCode: number | null = null;
 
 			// Use execa with streaming for bounded output
@@ -246,25 +246,11 @@ export const executeCommand = tool({
 				}
 			};
 
-			const abortHandler = () => {
-				aborted = true;
-				if (subprocess.pid) {
-					treeKill(subprocess.pid, 'SIGTERM');
-				}
-			};
-
 			// Handle timeout manually for better control
 			const timeoutId = setTimeout(timeoutHandler, timeoutMs);
 
 			// Unref the timeout so it doesn't block the event loop
 			timeoutId.unref();
-
-			// Handle abort signal
-			if (options.abortSignal) {
-				options.abortSignal.addEventListener('abort', abortHandler, {
-					once: true,
-				});
-			}
 
 			// Stream stdout with bounds
 			subprocess.stdout?.setEncoding('utf8');
@@ -288,32 +274,9 @@ export const executeCommand = tool({
 				result = await subprocess;
 			} finally {
 				clearTimeout(timeoutId);
-				if (options.abortSignal) {
-					options.abortSignal.removeEventListener('abort', abortHandler);
-				}
 			}
 
 			exitCode = result.exitCode ?? (result.timedOut ? SIGTERM : 1);
-
-			// If we didn't capture output through streaming (e.g., small output), use result
-			if (!stdout && result.stdout) {
-				const bounded = appendBoundedText(
-					'',
-					String(result.stdout),
-					maxOutputChars,
-				);
-				stdout = bounded.text;
-				stdoutTruncated = bounded.truncated;
-			}
-			if (!stderr && result.stderr) {
-				const bounded = appendBoundedText(
-					'',
-					String(result.stderr),
-					maxOutputChars,
-				);
-				stderr = bounded.text;
-				stderrTruncated = bounded.truncated;
-			}
 
 			// Prepend timeout message if timed out
 			if (result.timedOut || timedOut) {
@@ -322,15 +285,8 @@ export const executeCommand = tool({
 				)}\n${stderr}`;
 			}
 
-			if (aborted) {
-				stderr = `Command cancelled by user\n${stderr}`;
-			}
-
 			// Handle kill signals
-			if (
-				!aborted &&
-				(exitCode === SIGKILL || exitCode === SIGTERM || result.signal)
-			) {
+			if (exitCode === SIGKILL || exitCode === SIGTERM || result.signal) {
 				timedOut = true;
 			}
 
@@ -342,7 +298,7 @@ export const executeCommand = tool({
 				durationMs: Date.now() - startedAt,
 				timeoutMs,
 				timedOut,
-				aborted,
+				aborted: false,
 				stdout: stdout.trimEnd(),
 				stderr: stderr.trimEnd(),
 				stdoutTruncated,

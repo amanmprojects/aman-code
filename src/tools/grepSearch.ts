@@ -1,50 +1,42 @@
 import {tool} from 'ai';
 import {z} from 'zod';
 import {execFile} from 'node:child_process';
-import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
 
-// Version control system directories to exclude from searches
-const VCS_DIRECTORIES_TO_EXCLUDE = [
-	'.git',
-	'.svn',
-	'.hg',
-	'.bzr',
-	'.jj',
-	'.sl',
-];
-
-// Default cap on grep results when head_limit is unspecified
+const VCS_DIRECTORIES_TO_EXCLUDE = ['.git', '.svn', '.hg', '.bzr', '.jj', '.sl'];
 const DEFAULT_HEAD_LIMIT = 250;
+const EXCLUDED_DIRECTORIES = ['node_modules', 'dist', 'build', '.next', '.cache'];
 
-// Common directories to exclude
-const EXCLUDED_DIRECTORIES = [
-	'node_modules',
-	'dist',
-	'build',
-	'.next',
-	'.cache',
-];
+type RipgrepTextField = {
+	text?: string;
+	bytes?: string;
+};
 
-/**
- * Returns a paginated slice of an array according to `limit` and `offset`.
- *
- * When `limit` is `0` the function treats it as unlimited and returns all items after `offset`.
- *
- * @param items - The array to paginate
- * @param limit - Maximum number of items to return; `0` means unlimited; `undefined` uses `DEFAULT_HEAD_LIMIT`
- * @param offset - Number of items to skip from the start (default `0`)
- * @returns An object with:
- *  - `items`: the sliced subset,
- *  - `appliedLimit`: the effective limit when truncation occurred, otherwise `undefined`,
- *  - `wasTruncated`: `true` if there were more items beyond the returned slice, `false` otherwise
- */
+type RipgrepOutputRecord = {
+	type: 'begin' | 'match' | 'context' | 'end' | 'summary';
+	data?: {
+		path?: RipgrepTextField;
+		lines?: RipgrepTextField;
+		line_number?: number | null;
+		submatches?: unknown[];
+	};
+};
+
+type ParsedRipgrepRecord = {
+	type: 'match' | 'context';
+	filePath: string;
+	lineNumber: number | null;
+	text: string;
+	submatchCount: number;
+};
+
 function applyHeadLimit<T>(
 	items: T[],
 	limit: number | undefined,
 	offset: number = 0,
 ): {items: T[]; appliedLimit: number | undefined; wasTruncated: boolean} {
-	// Explicit 0 = unlimited escape hatch
 	if (limit === 0) {
 		return {
 			items: items.slice(offset),
@@ -52,6 +44,7 @@ function applyHeadLimit<T>(
 			wasTruncated: false,
 		};
 	}
+
 	const effectiveLimit = limit ?? DEFAULT_HEAD_LIMIT;
 	const sliced = items.slice(offset, offset + effectiveLimit);
 	const wasTruncated = items.length - offset > effectiveLimit;
@@ -62,12 +55,6 @@ function applyHeadLimit<T>(
 	};
 }
 
-/**
- * Convert an absolute or relative filesystem path to a path relative to the current working directory when safe to do so.
- *
- * @param filePath - The filesystem path to normalize
- * @returns The input path made relative to `process.cwd()` with POSIX-style separators, or the original `filePath` when a safe relative path cannot be produced
- */
 function toRelativePath(filePath: string): string {
 	const relativePath = path.relative(process.cwd(), filePath);
 	if (
@@ -77,38 +64,26 @@ function toRelativePath(filePath: string): string {
 	) {
 		return filePath;
 	}
+
 	return relativePath.split(path.sep).join('/');
 }
 
-/**
- * Build a comma-separated description of applied pagination parameters.
- *
- * @param appliedLimit - The effective maximum number of items to include; omitted when `undefined`
- * @param appliedOffset - The effective offset to apply; omitted when falsy (for example, `0` is not included)
- * @returns A string containing `limit: <appliedLimit>` and/or `offset: <appliedOffset>` separated by `, `, or an empty string if neither is included
- */
 function formatLimitInfo(
 	appliedLimit: number | undefined,
 	appliedOffset: number | undefined,
 ): string {
 	const parts: string[] = [];
-	if (appliedLimit !== undefined) parts.push(`limit: ${appliedLimit}`);
-	if (appliedOffset) parts.push(`offset: ${appliedOffset}`);
+	if (appliedLimit !== undefined) {
+		parts.push(`limit: ${appliedLimit}`);
+	}
+
+	if (appliedOffset) {
+		parts.push(`offset: ${appliedOffset}`);
+	}
+
 	return parts.join(', ');
 }
 
-/**
- * Execute a program using Node's `execFile` and return its captured stdout and stderr.
- *
- * Uses UTF-8 encoding and applies the provided `cwd`, `timeout`, and `maxBuffer` options.
- * Treats an exit code of `1` as a non-error (compatible with ripgrep's "no matches" behavior);
- * any other `execFile` error causes rejection.
- *
- * @param command - The executable to run (e.g., `rg`)
- * @param args - Argument list passed to the executable
- * @param options - Execution options: `cwd` to run in, `timeout` in milliseconds, and `maxBuffer` in bytes
- * @returns An object with `stdout` and `stderr` as UTF-8 strings
- */
 function execFileAsync(
 	command: string,
 	args: string[],
@@ -125,7 +100,6 @@ function execFileAsync(
 				encoding: 'utf-8',
 			},
 			(error, stdout, stderr) => {
-				// ripgrep returns exit code 1 when no matches found, which is not an error
 				if (error && error.code !== 1) {
 					reject(error);
 				} else {
@@ -134,6 +108,75 @@ function execFileAsync(
 			},
 		);
 	});
+}
+
+function decodeRipgrepText(field: RipgrepTextField | undefined): string {
+	if (typeof field?.text === 'string') {
+		return field.text;
+	}
+
+	if (typeof field?.bytes === 'string') {
+		return Buffer.from(field.bytes, 'base64').toString('utf8');
+	}
+
+	return '';
+}
+
+function parseRipgrepRecords(stdout: string): ParsedRipgrepRecord[] {
+	const records: ParsedRipgrepRecord[] = [];
+
+	for (const rawLine of stdout.split('\n')) {
+		if (!rawLine.trim()) {
+			continue;
+		}
+
+		const message = JSON.parse(rawLine) as RipgrepOutputRecord;
+		if (message.type !== 'match' && message.type !== 'context') {
+			continue;
+		}
+
+		const filePath = decodeRipgrepText(message.data?.path);
+		if (!filePath) {
+			continue;
+		}
+
+		records.push({
+			type: message.type,
+			filePath,
+			lineNumber:
+				typeof message.data?.line_number === 'number'
+					? message.data.line_number
+					: null,
+			text: decodeRipgrepText(message.data?.lines),
+			submatchCount: Array.isArray(message.data?.submatches)
+				? message.data.submatches.length
+				: 0,
+		});
+	}
+
+	return records;
+}
+
+function formatRipgrepLine(
+	record: ParsedRipgrepRecord,
+	showLineNumbers: boolean,
+): string {
+	const displayPath = toRelativePath(record.filePath);
+	const lineText = record.text.replace(/\n$/, '');
+
+	if (showLineNumbers && record.lineNumber != null) {
+		return `${displayPath}:${record.lineNumber}:${lineText}`;
+	}
+
+	return `${displayPath}:${lineText}`;
+}
+
+function searchPathError(targetPath: string, kind: 'unc' | 'device') {
+	if (kind === 'unc') {
+		return `Cannot search UNC path: ${targetPath}. Use a local path instead.`;
+	}
+
+	return `Cannot search device path: ${targetPath}. This path would block or produce infinite output.`;
 }
 
 export const grepSearch = tool({
@@ -173,7 +216,7 @@ export const grepSearch = tool({
 			.enum(['content', 'files_with_matches', 'count'])
 			.optional()
 			.describe(
-				'Output mode: "content" shows matching lines with context, "files_with_matches" shows only file paths (default), "count" shows match counts per file',
+				'Output mode: "content" shows matching lines with context, "files_with_matches" shows only file paths (default), "count" shows total matches per file',
 			),
 		contextBefore: z
 			.number()
@@ -203,7 +246,7 @@ export const grepSearch = tool({
 			.boolean()
 			.optional()
 			.describe(
-				'Show line numbers in output (rg -n). Requires outputMode: "content", ignored otherwise. Defaults to true.',
+				'Show line numbers in output (derived from rg JSON output). Requires outputMode: "content", ignored otherwise. Defaults to true.',
 			),
 		caseSensitive: z
 			.boolean()
@@ -266,7 +309,17 @@ export const grepSearch = tool({
 			const targetPath = inputPath ?? searchPath;
 			const resolved = targetPath ? path.resolve(targetPath) : process.cwd();
 
-			// Validate path exists
+			if ((targetPath && isUNCPath(targetPath)) || isUNCPath(resolved)) {
+				return {error: searchPathError(targetPath ?? resolved, 'unc')};
+			}
+
+			if (
+				(targetPath && isBlockedDevicePath(targetPath)) ||
+				isBlockedDevicePath(resolved)
+			) {
+				return {error: searchPathError(targetPath ?? resolved, 'device')};
+			}
+
 			try {
 				const stats = await fs.stat(resolved);
 				if (!stats.isDirectory() && !stats.isFile()) {
@@ -282,52 +335,40 @@ export const grepSearch = tool({
 						}. Current working directory: ${process.cwd()}.`,
 					};
 				}
+
 				throw error;
 			}
 
 			const args: string[] = ['--hidden'];
 
-			// Exclude VCS directories
 			for (const dir of VCS_DIRECTORIES_TO_EXCLUDE) {
 				args.push('--glob', `!${dir}`);
 			}
 
-			// Exclude common directories
 			for (const dir of EXCLUDED_DIRECTORIES) {
 				args.push('--glob', `!${dir}`);
 			}
 
-			// Limit line length to prevent minified content clutter
 			args.push('--max-columns', '500');
 
-			// Multiline mode
 			if (multiline) {
 				args.push('-U', '--multiline-dotall');
 			}
 
-			// Fixed strings (literal pattern)
 			if (fixedStrings) {
 				args.push('-F');
 			}
 
-			// Case sensitivity (default is case-sensitive)
 			if (caseSensitive === false) {
-				args.push('-i'); // --ignore-case
+				args.push('-i');
 			}
 
-			// Output mode
 			if (outputMode === 'files_with_matches') {
 				args.push('-l');
-			} else if (outputMode === 'count') {
-				args.push('-c');
+			} else {
+				args.push('--json');
 			}
 
-			// Line numbers (only for content mode)
-			if (showLineNumbers && outputMode === 'content') {
-				args.push('-n');
-			}
-
-			// Context lines (only for content mode)
 			if (outputMode === 'content') {
 				if (context !== undefined) {
 					args.push('-C', context.toString());
@@ -335,97 +376,65 @@ export const grepSearch = tool({
 					if (contextBefore !== undefined) {
 						args.push('-B', contextBefore.toString());
 					}
+
 					if (contextAfter !== undefined) {
 						args.push('-A', contextAfter.toString());
 					}
 				}
 			}
 
-			// File type filter
 			if (type) {
 				args.push('--type', type);
 			}
 
-			// Glob patterns (from glob parameter or includes array)
-			const globPatterns: string[] = [];
-			if (glob) {
-				// Split only on commas so spaces inside patterns are preserved
-				const rawPatterns = glob
-					.split(',')
-					.map(value => value.trim())
-					.filter(Boolean);
-				for (const rawPattern of rawPatterns) {
-					globPatterns.push(rawPattern);
-				}
-			}
-			if (includes) {
-				globPatterns.push(...includes);
-			}
-			for (const globPattern of globPatterns.filter(Boolean)) {
+			const globPatterns = [
+				...(glob?.trim() ? [glob.trim()] : []),
+				...(includes ?? []),
+			].filter(Boolean);
+			for (const globPattern of globPatterns) {
 				args.push('--glob', globPattern);
 			}
 
-			// Handle patterns starting with dash (use -e flag)
 			if (pattern.startsWith('-')) {
 				args.push('-e', pattern);
 			} else {
 				args.push(pattern);
 			}
 
-			// Add path at the end
 			args.push(resolved);
 
-			// Execute ripgrep
 			const {stdout} = await execFileAsync('rg', args, {
 				timeout: 30_000,
-				maxBuffer: 10 * 1024 * 1024, // 10MB
+				maxBuffer: 10 * 1024 * 1024,
 			});
 
-			const lines = stdout.trim().split('\n').filter(Boolean);
-
-			// Handle different output modes
 			if (outputMode === 'content') {
-				// For content mode, apply head limit and offset, then convert paths
+				const records = parseRipgrepRecords(stdout);
+				const totalMatchCount = records
+					.filter(record => record.type === 'match')
+					.reduce((sum, record) => sum + record.submatchCount, 0);
+				const formattedLines = records.map(record =>
+					formatRipgrepLine(record, showLineNumbers),
+				);
 				const {
 					items: limitedLines,
 					appliedLimit,
 					wasTruncated,
-				} = applyHeadLimit(lines, headLimit, offset);
-
-				const finalLines = limitedLines.map(line => {
-					// Lines have format: path:line_content or path:num:content
-					// Use regex to find the colon before line number to handle Windows paths like C:\path\file:10:content
-					const match = line.match(/^(.+?):(?=\d+:)/);
-					if (match) {
-						const filePath = match[1]!;
-						const rest = line.substring(filePath.length);
-						return toRelativePath(filePath) + rest;
-					}
-					// Fallback for content-mode lines with a single colon-delimited boundary (path:rest)
-					const colonIndex = line.lastIndexOf(':');
-					if (colonIndex > 0) {
-						const filePath = line.substring(0, colonIndex);
-						const rest = line.substring(colonIndex);
-						return toRelativePath(filePath) + rest;
-					}
-					return line;
-				});
-
+				} = applyHeadLimit(formattedLines, headLimit, offset);
 				const limitInfo = formatLimitInfo(
 					appliedLimit,
 					offset > 0 ? offset : undefined,
 				);
-				const content = finalLines.join('\n') || 'No matches found';
 
 				return {
 					pattern,
 					path: toRelativePath(resolved),
 					outputMode,
-					matchCount: lines.length,
-					matches: finalLines,
+					matchCount: totalMatchCount,
+					matches: limitedLines,
 					truncated: wasTruncated,
-					content,
-					numLines: finalLines.length,
+					content: limitedLines.join('\n') || 'No matches found',
+					numLines: limitedLines.length,
 					...(appliedLimit !== undefined && {appliedLimit}),
 					...(offset > 0 && {appliedOffset: offset}),
 					...(limitInfo && {paginationInfo: limitInfo}),
@@ -433,93 +442,82 @@ export const grepSearch = tool({
 			}
 
 			if (outputMode === 'count') {
-				// For count mode, apply head limit and offset, then convert paths
+				const matchRecords = parseRipgrepRecords(stdout).filter(
+					record => record.type === 'match',
+				);
+				const countsByFile = new Map<string, number>();
+
+				for (const record of matchRecords) {
+					countsByFile.set(
+						record.filePath,
+						(countsByFile.get(record.filePath) ?? 0) + record.submatchCount,
+					);
+				}
+
+				const countLines = Array.from(
+					countsByFile,
+					([filePath, totalMatchesForFile]) =>
+						`${toRelativePath(filePath)}:${totalMatchesForFile}`,
+				);
 				const {
 					items: limitedLines,
 					appliedLimit,
 					wasTruncated,
-				} = applyHeadLimit(lines, headLimit, offset);
-
-				const finalLines = limitedLines.map(line => {
-					// Lines have format: /absolute/path:count
-					const colonIndex = line.lastIndexOf(':');
-					if (colonIndex > 0) {
-						const filePath = line.substring(0, colonIndex);
-						const count = line.substring(colonIndex);
-						return toRelativePath(filePath) + count;
-					}
-					return line;
-				});
-
-				// Parse count output to extract total matches and file count
-				let totalMatches = 0;
-				let fileCount = 0;
-				for (const line of finalLines) {
-					const colonIndex = line.lastIndexOf(':');
-					if (colonIndex > 0) {
-						const countStr = line.substring(colonIndex + 1);
-						const count = parseInt(countStr, 10);
-						if (!isNaN(count)) {
-							totalMatches += count;
-							fileCount += 1;
-						}
-					}
-				}
-
+				} = applyHeadLimit(countLines, headLimit, offset);
+				const totalMatches = Array.from(countsByFile.values()).reduce(
+					(sum, count) => sum + count,
+					0,
+				);
 				const limitInfo = formatLimitInfo(
 					appliedLimit,
 					offset > 0 ? offset : undefined,
 				);
-				const content = finalLines.join('\n') || 'No matches found';
 
 				return {
 					pattern,
 					path: toRelativePath(resolved),
 					outputMode,
-					numFiles: fileCount,
+					numFiles: countsByFile.size,
 					numMatches: totalMatches,
 					matchCount: totalMatches,
-					matches: [],
+					matches: limitedLines,
 					truncated: wasTruncated,
-					content,
+					content: limitedLines.join('\n') || 'No matches found',
 					...(appliedLimit !== undefined && {appliedLimit}),
 					...(offset > 0 && {appliedOffset: offset}),
 					...(limitInfo && {paginationInfo: limitInfo}),
 				};
 			}
 
-			// files_with_matches mode (default)
-			// Sort by modification time, apply head limit, convert to relative paths
+			const lines = stdout.trim().split('\n').filter(Boolean);
 			const stats = await Promise.allSettled(
 				lines.map(filePath => fs.stat(filePath)),
 			);
-
 			const sortedMatches = lines
-				.map((filePath, i) => {
-					const result = stats[i]!;
+				.map((filePath, index) => {
+					const result = stats[index]!;
 					const mtimeMs =
 						result.status === 'fulfilled' ? result.value.mtimeMs ?? 0 : 0;
 					return {filePath, mtimeMs};
 				})
-				.sort((a, b) => {
-					// In tests, sort by filename for deterministic results
+				.sort((left, right) => {
 					if (process.env['NODE_ENV'] === 'test') {
-						return a.filePath.localeCompare(b.filePath);
+						return left.filePath.localeCompare(right.filePath);
 					}
-					const timeComparison = b.mtimeMs - a.mtimeMs;
+
+					const timeComparison = right.mtimeMs - left.mtimeMs;
 					if (timeComparison === 0) {
-						return a.filePath.localeCompare(b.filePath);
+						return left.filePath.localeCompare(right.filePath);
 					}
+
 					return timeComparison;
 				})
 				.map(item => item.filePath);
-
 			const {items: limitedMatches, appliedLimit} = applyHeadLimit(
 				sortedMatches,
 				headLimit,
 				offset,
 			);
-
 			const relativeMatches = limitedMatches.map(toRelativePath);
 			const limitInfo = formatLimitInfo(
 				appliedLimit,
@@ -540,8 +538,7 @@ export const grepSearch = tool({
 				};
 			}
 
-			const isTruncated =
-				offset + relativeMatches.length < sortedMatches.length;
+			const isTruncated = offset + relativeMatches.length < sortedMatches.length;
 
 			return {
 				pattern,
@@ -557,7 +554,6 @@ export const grepSearch = tool({
 				...(limitInfo && {paginationInfo: limitInfo}),
 			};
 		} catch (error: any) {
-			// Check if ripgrep is not installed
 			const missingPath = typeof error.path === 'string' ? error.path : '';
 			const missingRg =
 				missingPath === 'rg' ||
