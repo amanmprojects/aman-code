@@ -6,4 +6,7 @@ dist
 .editorconfig
 .prettierignore
 .prettierrc
-.prettierignore
+
+claude-code-for-inspiration
+.codex
+.kilo

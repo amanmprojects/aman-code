@@ -1,36 +1,44 @@
-import React from 'react';
-import { Box, Text } from 'ink';
+import React, {memo} from 'react';
+import {Box, Text} from 'ink';
 import Markdown from './Markdown.js';
 import ToolCallStatus from './ToolCallStatus.js';
-import { isToolUIPart, type UIMessage } from 'ai';
+import {isToolUIPart, type UIMessage} from 'ai';
 
 interface AssistantMessageProps {
 	message: UIMessage;
 }
 
-export default function AssistantMessage({ message }: AssistantMessageProps) {
+/**
+ * Render an assistant message composed of its parts (text, reasoning, and tool UI parts).
+ *
+ * @param message - The `UIMessage` whose `parts` are rendered into Ink components
+ * @returns The rendered assistant message as an Ink/React element
+ */
+function AssistantMessage({message}: AssistantMessageProps) {
 	return (
 		<Box flexDirection="column" marginBottom={1}>
 			{message.parts.map((part, i) => {
 				if (part.type === 'text' && part.text) {
 					return (
-						<Box key={`text-${i}`} marginLeft={2} marginTop={1}>
-							<Markdown>{part.text}</Markdown>
+						<Box key={`text-${i}`} marginLeft={1} marginTop={1}>
+							<Markdown cacheKey={`${message.id}:text:${i}`}>
+								{part.text}
+							</Markdown>
 						</Box>
 					);
 				}
 
 				if (part.type === 'reasoning') {
 					return (
-						<Box key={`reasoning-${i}`} marginLeft={2} marginTop={1}>
-							<Text color='grey'>{part.text}</Text>
+						<Box key={`reasoning-${i}`} marginLeft={1} marginTop={1}>
+							<Text color="grey">{part.text}</Text>
 						</Box>
 					);
 				}
 
 				if (isToolUIPart(part)) {
 					return (
-						<Box key={`tool-${i}`} marginLeft={2} marginTop={1}>
+						<Box key={`tool-${i}`} marginLeft={1} marginTop={1}>
 							<ToolCallStatus toolPart={part} />
 						</Box>
 					);
@@ -41,3 +49,5 @@ export default function AssistantMessage({ message }: AssistantMessageProps) {
 		</Box>
 	);
 }
+
+export default memo(AssistantMessage);

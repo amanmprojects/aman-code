@@ -1,115 +1,176 @@
-import React, { useState, useCallback } from 'react';
-import { Box, Spacer, Text, useInput } from 'ink';
-import TextInput from 'ink-text-input';
-import Spinner from 'ink-spinner';
-import MessageList from './components/MessageList.js';
-import ModeIndicator from './components/ModeIndicator.js';
-import { useAgent } from './hooks/useAgent.js';
-import type { Mode } from './utils/permissions.js';
-import BigText from 'ink-big-text';
-import Divider from 'ink-divider';
+import React, {useState, useCallback, useEffect} from 'react';
+import {Box, useInput} from 'ink';
+import AppFooter from './components/AppFooter.js';
+import AppHeader from './components/AppHeader.js';
+import ComposerPanel from './components/ComposerPanel.js';
+import ConversationPanel from './components/ConversationPanel.js';
+import {useAgent} from './hooks/useAgent.js';
+import type {Mode} from './utils/permissions.js';
+import {formatUiPerfDuration, logUiPerf} from './utils/uiPerf.js';
 
 interface AppProps {
-  mode?: Mode;
+	mode?: Mode;
 }
 
 const MODE_ORDER: Mode[] = ['plan', 'code', 'yolo'];
 
-export default function App({ mode: initialMode = 'code' }: AppProps) {
-  const [mode, setMode] = useState<Mode>(initialMode);
-  const [input, setInput] = useState('');
-  const { messages, isLoading, error, sendMessage } = useAgent(mode);
+/**
+ * Root Ink React component that manages the chat UI, agent integration, mode switching, and interactive tool prompts.
+ *
+ * Renders messages, a loading indicator, global errors, either an interactive prompt (when a tool interaction is active)
+ * or a free-text input, and a bottom bar showing the current mode and status.
+ *
+ * @param mode - The initial operation mode (`'plan' | 'code' | 'yolo'`). Defaults to `'code'`.
+ * @returns The rendered CLI application UI.
+ */
+export default function App({mode: initialMode = 'code'}: AppProps) {
+	const [mode, setMode] = useState<Mode>(initialMode);
+	const [interactionError, setInteractionError] = useState<string | null>(null);
+	const {
+		messages,
+		isLoading,
+		error,
+		sendMessage,
+		pendingInteraction,
+		submitToolApproval,
+		submitToolOutput,
+	} = useAgent(mode);
 
-  useInput((keyInput, key) => {
-    const isShiftTab = keyInput === '\u001B[Z' || (key.tab && key.shift);
-    const isTab = key.tab && !key.shift;
+	const hasPendingInteraction = pendingInteraction != null;
 
-    if (!isTab && !isShiftTab) {
-      return;
-    }
+	useEffect(() => {
+		setInteractionError(null);
+	}, [pendingInteraction]);
 
-    if (isLoading) {
-      return;
-    }
+	useInput((keyInput, key) => {
+		const isShiftTab = keyInput === '\u001B[Z' || (key.tab && key.shift);
+		const isTab = key.tab && !key.shift;
 
-    setMode(previousMode => {
-      const currentIndex = MODE_ORDER.indexOf(previousMode);
-      if (currentIndex === -1) {
-        return previousMode;
-      }
+		if (!isTab && !isShiftTab) {
+			return;
+		}
 
-      const nextIndex = isShiftTab
-        ? (currentIndex - 1 + MODE_ORDER.length) % MODE_ORDER.length
-        : (currentIndex + 1) % MODE_ORDER.length;
+		if (isLoading || hasPendingInteraction) {
+			return;
+		}
 
-      const nextMode = MODE_ORDER[nextIndex];
-      return nextMode ?? previousMode;
-    });
-  });
+		setMode(previousMode => {
+			const currentIndex = MODE_ORDER.indexOf(previousMode);
+			if (currentIndex === -1) {
+				return previousMode;
+			}
 
-  const handleSubmit = useCallback(
-    (value: string) => {
-      const trimmed = value.trim();
-      if (!trimmed || isLoading) {
-        return;
-      }
+			const nextIndex = isShiftTab
+				? (currentIndex - 1 + MODE_ORDER.length) % MODE_ORDER.length
+				: (currentIndex + 1) % MODE_ORDER.length;
 
-      setInput('');
-      sendMessage(trimmed);
-    },
-    [isLoading, sendMessage],
-  );
+			const nextMode = MODE_ORDER[nextIndex];
+			if (nextMode && nextMode !== previousMode) {
+				logUiPerf('mode_switch', {
+					from: previousMode,
+					to: nextMode,
+				});
+			}
 
-  return (
-    <Box flexDirection="column" paddingTop={0}>
-      {/* Header */}
-      <Box marginBottom={1} flexDirection="column" height={12} flexShrink={0}>
-        <Divider />
-        <BigText text="aman-code" />
-        <Divider />
-      </Box>
-      {/* Messages */}
-      <MessageList messages={messages} />
+			return nextMode ?? previousMode;
+		});
+	});
 
-      {/* Loading indicator */}
-      {isLoading && messages.length > 0 && (
-        <Box marginBottom={1} marginTop={1}>
-          <Text color="yellow">
-            <Spinner type="dots" />
-          </Text>
-          <Text dimColor> Thinking...</Text>
-        </Box>
-      )}
+	const handleSubmit = useCallback(
+		(value: string) => {
+			if (isLoading || hasPendingInteraction) {
+				return;
+			}
 
-      {/* Error display */}
-      {error && (
-        <Box marginBottom={1} marginTop={1}>
-          <Text color="red">Error: {error}</Text>
-        </Box>
-      )}
+			const startedAt = performance.now();
+			void sendMessage(value);
+			logUiPerf('send_message_requested', {
+				enqueueMs: formatUiPerfDuration(performance.now() - startedAt),
+				messageLength: value.length,
+			});
+		},
+		[hasPendingInteraction, isLoading, sendMessage],
+	);
 
-      {/* Input */}
-      <Box
-        borderStyle="bold"
-        borderLeft={false}
-        borderRight={false}
-        flexDirection="row"
-      >
-        <Text> ❯ </Text>
-        <TextInput
-          value={input}
-          onChange={setInput}
-          onSubmit={handleSubmit}
-          placeholder={isLoading ? 'Waiting for response...' : 'Ask me anything...'}
-        />
-      </Box>
+	const handleApproval = useCallback(
+		async (approved: boolean) => {
+			if (pendingInteraction?.kind !== 'approval') {
+				return;
+			}
 
-      {/* Bottom bar */}
-      <Box paddingLeft={1} paddingRight={1}>
-        <ModeIndicator mode={mode} />
-        <Spacer />
-        <Text>Tab/Shift+Tab to change mode • Ctrl+C to exit</Text>
-      </Box>
-    </Box>
-  );
+			setInteractionError(null);
+
+			const nextMode =
+				approved && pendingInteraction.toolName === 'exitPlanMode'
+					? pendingInteraction.targetMode ?? 'code'
+					: mode;
+
+			try {
+				await submitToolApproval({
+					messageId: pendingInteraction.messageId,
+					toolCallId: pendingInteraction.toolCallId,
+					approvalId: pendingInteraction.approvalId,
+					approved,
+					overrideMode: nextMode,
+				});
+
+				if (approved && pendingInteraction.toolName === 'exitPlanMode') {
+					setMode(nextMode);
+				}
+			} catch (error) {
+				console.error('Failed to submit tool approval', error);
+				setInteractionError('Failed to submit approval. Please try again.');
+			}
+		},
+		[mode, pendingInteraction, submitToolApproval],
+	);
+
+	const handleQuestionAnswer = useCallback(
+		async (selectedOptionIds: string[]) => {
+			if (pendingInteraction?.kind !== 'question') {
+				return;
+			}
+
+			setInteractionError(null);
+
+			const selectedLabels = pendingInteraction.options
+				.filter(option => selectedOptionIds.includes(option.id))
+				.map(option => option.label);
+
+			try {
+				await submitToolOutput({
+					messageId: pendingInteraction.messageId,
+					toolCallId: pendingInteraction.toolCallId,
+					output: {
+						selectedOptionIds,
+						selectedLabels,
+					},
+				});
+			} catch (error) {
+				console.error('Failed to submit tool output', error);
+				setInteractionError('Failed to submit response. Please try again.');
+			}
+		},
+		[pendingInteraction, submitToolOutput],
+	);
+
+	return (
+		<Box flexDirection="column" paddingTop={0}>
+			<AppHeader />
+			<ConversationPanel
+				messages={messages}
+				isLoading={isLoading}
+				error={error}
+			/>
+			<ComposerPanel
+				pendingInteraction={pendingInteraction}
+				isLoading={isLoading}
+				interactionError={interactionError}
+				onSubmitMessage={handleSubmit}
+				onApprove={handleApproval}
+				onSubmitAnswer={handleQuestionAnswer}
+			/>
+			<AppFooter mode={mode} hasPendingInteraction={hasPendingInteraction} />
+		</Box>
+	);
 }

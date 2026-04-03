@@ -8,7 +8,7 @@
 	},
 	"type": "module",
 	"engines": {
-		"node": ">=16"
+		"node": ">=18.19"
 	},
 	"scripts": {
 		"build": "tsc",
@@ -20,10 +20,12 @@
 	],
 	"dependencies": {
 		"@ai-sdk/openai-compatible": "^2.0.38",
+		"@tavily/ai-sdk": "^0.4.1",
 		"@types/diff": "^8.0.0",
 		"ai": "^6.0.142",
 		"diff": "^8.0.4",
 		"dotenv": "^17.3.1",
+		"execa": "^9.5.2",
 		"ink": "^4.1.0",
 		"ink-big-text": "^2.0.0",
 		"ink-divider": "^4.1.1",
@@ -34,6 +36,7 @@
 		"meow": "^11.0.0",
 		"react": "^18.2.0",
 		"react-devtools-core": "^7.0.1",
+		"tree-kill": "^1.2.2",
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
