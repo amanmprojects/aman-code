@@ -8,6 +8,37 @@ function generateId() {
 	return `msg-${Date.now()}-${++msgCounter}`;
 }
 
+function normalizeMessages(nextMessages: UIMessage[], previousMessages: UIMessage[]): UIMessage[] {
+	const seenIds = new Set<string>();
+
+	return nextMessages.map((message, index) => {
+		const candidateId = message.id.trim();
+		const previousMessage = previousMessages[index];
+		const previousId = previousMessage?.id?.trim();
+
+		let normalizedId = candidateId;
+
+		if (!normalizedId || seenIds.has(normalizedId)) {
+			if (previousMessage?.role === message.role && previousId && !seenIds.has(previousId)) {
+				normalizedId = previousId;
+			} else {
+				normalizedId = generateId();
+			}
+		}
+
+		seenIds.add(normalizedId);
+
+		if (normalizedId === message.id) {
+			return message;
+		}
+
+		return {
+			...message,
+			id: normalizedId,
+		};
+	});
+}
+
 function getErrorMessage(error: unknown): string {
 	if (error instanceof Error) {
 		return error.message;
@@ -62,8 +93,9 @@ export function useAgent(mode: Mode) {
 	}, [isLoading, ensureAgentMode]);
 
 	const setConversation = useCallback((nextMessages: UIMessage[]) => {
-		messagesRef.current = nextMessages;
-		setMessages(nextMessages);
+		const normalizedMessages = normalizeMessages(nextMessages, messagesRef.current);
+		messagesRef.current = normalizedMessages;
+		setMessages(normalizedMessages);
 	}, []);
 
 	const sendMessage = useCallback(async (text: string) => {

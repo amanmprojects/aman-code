@@ -12,12 +12,14 @@ interface MessageListProps {
 export default function MessageList({ messages }: MessageListProps) {
 	return (
 		<Box flexDirection="column">
-			{messages.map((msg) => {
+			{messages.map((msg, index) => {
+				const messageKey = msg.id.trim() || `${msg.role}-${index}`;
+
 				if (msg.role === 'user') {
-					return <UserMessage key={msg.id} msg={msg} />;
+					return <UserMessage key={messageKey} msg={msg} />;
 				}
 
-				return <AssistantMessage key={msg.id} message={msg} />;
+				return <AssistantMessage key={messageKey} message={msg} />;
 			})}
 		</Box>
 	);
