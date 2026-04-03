@@ -46,38 +46,32 @@ test('getAllowedToolNames plan returns a Set', (t) => {
 	t.true(result instanceof Set);
 });
 
-test('getAllowedToolNames plan returns exactly 3 tools', (t) => {
+test('getAllowedToolNames plan returns exactly 9 tools', (t) => {
 	const result = getAllowedToolNames('plan');
-	t.is(result.size, 3);
+	t.is(result.size, 9);
 });
 
-test('getAllowedToolNames plan includes readFile', (t) => {
+test('getAllowedToolNames plan includes read-only tools', (t) => {
 	t.true(getAllowedToolNames('plan').has('readFile'));
-});
-
-test('getAllowedToolNames plan includes grepSearch', (t) => {
 	t.true(getAllowedToolNames('plan').has('grepSearch'));
-});
-
-test('getAllowedToolNames plan includes globSearch', (t) => {
 	t.true(getAllowedToolNames('plan').has('globSearch'));
+	t.true(getAllowedToolNames('plan').has('listDir'));
+	t.true(getAllowedToolNames('plan').has('toolSearch'));
+	t.true(getAllowedToolNames('plan').has('webSearch'));
+	t.true(getAllowedToolNames('plan').has('askUserQuestion'));
+	t.true(getAllowedToolNames('plan').has('exitPlanMode'));
+	t.true(getAllowedToolNames('plan').has('todoWrite'));
 });
 
-test('getAllowedToolNames plan does not include writeFile', (t) => {
+test('getAllowedToolNames plan does not include mutating tools', (t) => {
 	t.false(getAllowedToolNames('plan').has('writeFile'));
-});
-
-test('getAllowedToolNames plan does not include editFile', (t) => {
 	t.false(getAllowedToolNames('plan').has('editFile'));
-});
-
-test('getAllowedToolNames plan does not include executeCommand', (t) => {
 	t.false(getAllowedToolNames('plan').has('executeCommand'));
 });
 
-test('getAllowedToolNames code returns exactly 6 tools', (t) => {
+test('getAllowedToolNames code returns exactly 12 tools', (t) => {
 	const result = getAllowedToolNames('code');
-	t.is(result.size, 6);
+	t.is(result.size, 12);
 });
 
 test('getAllowedToolNames code includes all tool names', (t) => {
@@ -88,11 +82,17 @@ test('getAllowedToolNames code includes all tool names', (t) => {
 	t.true(result.has('executeCommand'));
 	t.true(result.has('grepSearch'));
 	t.true(result.has('globSearch'));
+	t.true(result.has('listDir'));
+	t.true(result.has('toolSearch'));
+	t.true(result.has('webSearch'));
+	t.true(result.has('askUserQuestion'));
+	t.true(result.has('exitPlanMode'));
+	t.true(result.has('todoWrite'));
 });
 
-test('getAllowedToolNames yolo returns exactly 6 tools', (t) => {
+test('getAllowedToolNames yolo returns exactly 12 tools', (t) => {
 	const result = getAllowedToolNames('yolo');
-	t.is(result.size, 6);
+	t.is(result.size, 12);
 });
 
 test('getAllowedToolNames yolo includes all tool names', (t) => {
@@ -103,6 +103,12 @@ test('getAllowedToolNames yolo includes all tool names', (t) => {
 	t.true(result.has('executeCommand'));
 	t.true(result.has('grepSearch'));
 	t.true(result.has('globSearch'));
+	t.true(result.has('listDir'));
+	t.true(result.has('toolSearch'));
+	t.true(result.has('webSearch'));
+	t.true(result.has('askUserQuestion'));
+	t.true(result.has('exitPlanMode'));
+	t.true(result.has('todoWrite'));
 });
 
 test('getAllowedToolNames code and yolo return equivalent tool sets', (t) => {
@@ -122,9 +128,8 @@ test('getAllowedToolNames plan is a subset of code tools', (t) => {
 	}
 });
 
-test('getAllowedToolNames returns read-only tools for unknown mode via type cast', (t) => {
-	// The default branch handles unknown modes — verify via type cast
-	const result = getAllowedToolNames('plan' as Mode);
-	t.is(result.size, 3);
+test('getAllowedToolNames returns fallback tool set for unknown mode via type cast', (t) => {
+	const result = getAllowedToolNames('invalid-mode' as Mode);
+	t.is(result.size, 9);
 	t.false(result.has('writeFile'));
 });
