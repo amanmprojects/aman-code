@@ -17,6 +17,12 @@ const TOOL_ICONS: Record<string, string> = {
 	executeCommand: '⚡',
 	grepSearch: '🔍',
 	globSearch: '📂',
+	listDir: '🗂️',
+	toolSearch: '🧭',
+	webSearch: '🌐',
+	askUserQuestion: '❓',
+	exitPlanMode: '🚦',
+	todoWrite: '✅',
 };
 
 function formatArgs(toolName: string, args: Record<string, any>): string {
@@ -33,6 +39,18 @@ function formatArgs(toolName: string, args: Record<string, any>): string {
 			return `"${args['pattern'] ?? ''}" in ${args['searchPath'] ?? '.'}`;
 		case 'globSearch':
 			return `"${args['pattern'] ?? ''}" in ${args['path'] ?? args['searchPath'] ?? '.'}`;
+		case 'listDir':
+			return args['path'] ?? '.';
+		case 'toolSearch':
+			return args['query'] ?? '';
+		case 'webSearch':
+			return args['query'] ?? '';
+		case 'askUserQuestion':
+			return args['question'] ?? '';
+		case 'exitPlanMode':
+			return args['planSummary'] ?? 'requesting plan handoff';
+		case 'todoWrite':
+			return `${Array.isArray(args['todos']) ? args['todos'].length : 0} todos`;
 		default:
 			return JSON.stringify(args).slice(0, 80);
 	}
@@ -48,6 +66,16 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 	}
 
 	switch (toolName) {
+		case 'askUserQuestion':
+			return (
+				<Text dimColor>
+					Selected {Array.isArray(result.selectedLabels) ? result.selectedLabels.join(', ') : 'response'}
+				</Text>
+			);
+		case 'exitPlanMode':
+			return <Text dimColor>{result.message ?? 'Plan exit approved.'}</Text>;
+		case 'todoWrite':
+			return <Text dimColor>{result.count ?? 0} todo item(s) saved</Text>;
 		case 'editFile':
 			if (result.diff) {
 				return <DiffView diff={result.diff} />;
@@ -119,6 +147,36 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 					)}
 				</Box>
 			);
+		case 'listDir':
+			return (
+				<Box flexDirection="column">
+					<Text dimColor>
+						{result.count ?? 0} entr{result.count === 1 ? 'y' : 'ies'}
+						{result.truncated ? ' (truncated)' : ''}
+					</Text>
+					{Array.isArray(result.entries) ? (
+						<Text>{result.entries.slice(0, 10).map((entry: any) => `${entry.type} ${entry.path}`).join('\n')}</Text>
+					) : null}
+				</Box>
+			);
+		case 'toolSearch':
+			return (
+				<Box flexDirection="column">
+					<Text dimColor>{result.count ?? 0} matching tool(s)</Text>
+					{Array.isArray(result.results) ? (
+						<Text>{result.results.slice(0, 10).map((entry: any) => `${entry.name} — ${entry.description}`).join('\n')}</Text>
+					) : null}
+				</Box>
+			);
+		case 'webSearch':
+			return (
+				<Box flexDirection="column">
+					<Text dimColor>{Array.isArray(result.results) ? result.results.length : 0} web result(s)</Text>
+					{Array.isArray(result.results) ? (
+						<Text>{result.results.slice(0, 5).map((entry: any) => entry.title ?? entry.url ?? 'Untitled').join('\n')}</Text>
+					) : null}
+				</Box>
+			);
 		default:
 			return <Text dimColor>{JSON.stringify(result).slice(0, 200)}</Text>;
 	}
@@ -130,18 +188,27 @@ export default function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
 	const args = (toolPart.input ?? {}) as Record<string, any>;
 	const argsStr = formatArgs(toolName, args);
 	const isRunning = toolPart.state === 'input-streaming' || toolPart.state === 'input-available';
+	const isAwaitingApproval = toolPart.state === 'approval-requested';
+	const isApprovalResponded = toolPart.state === 'approval-responded';
+	const isDenied = toolPart.state === 'output-denied';
 	const isDone = toolPart.state === 'output-available';
 	const isError = toolPart.state === 'output-error';
 
 	return (
 		<Box flexDirection="column" marginY={0}>
 			<Box>
-				{isRunning ? (
+				{isAwaitingApproval ? (
+					<Text color="magenta">? </Text>
+				) : isRunning ? (
 					<Text color="yellow">
 						<Spinner type="dots" />{' '}
 					</Text>
+				) : isApprovalResponded ? (
+					<Text color="cyan">… </Text>
 				) : isDone ? (
 					<Text color="green">✓ </Text>
+				) : isDenied ? (
+					<Text color="yellow">- </Text>
 				) : (
 					<Text color="red">✗ </Text>
 				)}
@@ -151,9 +218,26 @@ export default function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
 					{argsStr ? <Text dimColor> {argsStr}</Text> : null}
 				</Text>
 			</Box>
+			{isAwaitingApproval && (
+				<Box marginLeft={2}>
+					<Text dimColor>Waiting for approval</Text>
+				</Box>
+			)}
+			{isApprovalResponded && toolPart.approval?.approved != null && (
+				<Box marginLeft={2}>
+					<Text dimColor>
+						{toolPart.approval.approved ? 'Approval received' : 'Approval denied'}
+					</Text>
+				</Box>
+			)}
 			{isDone && toolPart.state === 'output-available' && toolPart.output != null && (
 				<Box marginLeft={2} flexDirection="column">
 					{formatResult(toolName, toolPart.output as any)}
+				</Box>
+			)}
+			{isDenied && toolPart.state === 'output-denied' && (
+				<Box marginLeft={2}>
+					<Text color="yellow">{toolPart.approval?.reason ?? 'Tool execution denied.'}</Text>
 				</Box>
 			)}
 			{isError && toolPart.state === 'output-error' && toolPart.errorText && (
