@@ -1,11 +1,11 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import AssistantMessage from './AssistantMessage.js';
-import type { ChatMessage } from '../hooks/useAgent.js';
-import Divider from 'ink-divider';
+import type { UIMessage } from 'ai';
+// import Divider from 'ink-divider';
 
 interface MessageListProps {
-	messages: ChatMessage[];
+	messages: UIMessage[];
 }
 
 export default function MessageList({ messages }: MessageListProps) {
@@ -14,20 +14,16 @@ export default function MessageList({ messages }: MessageListProps) {
 			{messages.map((msg, i) => {
 				if (msg.role === 'user') {
 					return (
-						<Box key={i} marginBottom={1} flexDirection='column'>
-							<Divider />
-							<Box >
+						<Box key={msg.id} flexDirection='row' borderStyle='round'>
 								<Text color="green" bold>
 									{'❯ '}
 								</Text>
-								<Text>{msg.content}</Text>
-							</Box>
-							<Divider />
+								<Text>{msg.parts.filter(p => p.type === 'text').map(p => (p as { text: string }).text).join('')}</Text>
 						</Box>
 					);
 				}
 
-				return <AssistantMessage key={i} message={msg} />;
+				return <AssistantMessage key={msg.id} message={msg} />;
 			})}
 		</Box>
 	);

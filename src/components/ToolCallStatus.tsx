@@ -1,11 +1,11 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import type { ToolCallInfo } from '../hooks/useAgent.js';
+import type { DynamicToolUIPart } from 'ai';
 import DiffView from './DiffView.js';
 
 interface ToolCallStatusProps {
-	toolCall: ToolCallInfo;
+	toolPart: DynamicToolUIPart;
 }
 
 const TOOL_ICONS: Record<string, string> = {
@@ -121,36 +121,40 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 	}
 }
 
-export default function ToolCallStatus({ toolCall }: ToolCallStatusProps) {
-	const icon = TOOL_ICONS[toolCall.toolName] ?? '🔨';
-	const argsStr = formatArgs(toolCall.toolName, toolCall.args);
+export default function ToolCallStatus({ toolPart }: ToolCallStatusProps) {
+	const icon = TOOL_ICONS[toolPart.toolName] ?? '🔨';
+	const args = (toolPart.input ?? {}) as Record<string, any>;
+	const argsStr = formatArgs(toolPart.toolName, args);
+	const isRunning = toolPart.state === 'input-streaming' || toolPart.state === 'input-available';
+	const isDone = toolPart.state === 'output-available';
+	const isError = toolPart.state === 'output-error';
 
 	return (
 		<Box flexDirection="column" marginY={0}>
 			<Box>
-				{toolCall.status === 'running' ? (
+				{isRunning ? (
 					<Text color="yellow">
 						<Spinner type="dots" />{' '}
 					</Text>
-				) : toolCall.status === 'done' ? (
+				) : isDone ? (
 					<Text color="green">✓ </Text>
 				) : (
 					<Text color="red">✗ </Text>
 				)}
 				<Text>
 					{icon}{' '}
-					<Text bold>{toolCall.toolName}</Text>
+					<Text bold>{toolPart.toolName}</Text>
 					{argsStr ? <Text dimColor> {argsStr}</Text> : null}
 				</Text>
 			</Box>
-			{toolCall.status === 'done' && toolCall.result && (
+			{isDone && toolPart.state === 'output-available' && toolPart.output != null && (
 				<Box marginLeft={2} flexDirection="column">
-					{formatResult(toolCall.toolName, toolCall.result)}
+					{formatResult(toolPart.toolName, toolPart.output as any)}
 				</Box>
 			)}
-			{toolCall.status === 'error' && toolCall.error && (
+			{isError && toolPart.state === 'output-error' && toolPart.errorText && (
 				<Box marginLeft={2}>
-					<Text color="red">{toolCall.error}</Text>
+					<Text color="red">{toolPart.errorText}</Text>
 				</Box>
 			)}
 		</Box>

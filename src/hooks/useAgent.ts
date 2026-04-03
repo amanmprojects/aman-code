@@ -1,30 +1,15 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createAgent } from '../agent/index.js';
 import type { Mode } from '../utils/permissions.js';
+import type { UIMessage, DynamicToolUIPart } from 'ai';
 
-export interface ToolCallInfo {
-	id: string;
-	toolName: string;
-	args: Record<string, any>;
-	status: 'running' | 'done' | 'error';
-	result?: any;
-	error?: string;
-}
-
-export interface MessagePart {
-	type: 'text' | 'tool-call';
-	text?: string;
-	toolCall?: ToolCallInfo;
-}
-
-export interface ChatMessage {
-	role: 'user' | 'assistant';
-	content: string;
-	parts: MessagePart[];
+let msgCounter = 0;
+function generateId() {
+	return `msg-${Date.now()}-${++msgCounter}`;
 }
 
 export function useAgent(mode: Mode) {
-	const [messages, setMessages] = useState<ChatMessage[]>([]);
+	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const agentRef = useRef(createAgent(mode));
@@ -44,9 +29,9 @@ export function useAgent(mode: Mode) {
 		setError(null);
 		setIsLoading(true);
 
-		const userMessage: ChatMessage = {
+		const userMessage: UIMessage = {
+			id: generateId(),
 			role: 'user',
-			content: text,
 			parts: [{ type: 'text', text }],
 		};
 
@@ -54,9 +39,9 @@ export function useAgent(mode: Mode) {
 
 		conversationRef.current.push({ role: 'user', content: text });
 
-		const assistantMessage: ChatMessage = {
+		const assistantMessage: UIMessage = {
+			id: generateId(),
 			role: 'assistant',
-			content: '',
 			parts: [],
 		};
 
@@ -68,26 +53,17 @@ export function useAgent(mode: Mode) {
 			});
 
 			let currentText = '';
-			const toolCalls = new Map<string, ToolCallInfo>();
+			const orderedParts: UIMessage['parts'] = [];
+			const toolCallIndex = new Map<string, number>();
 
 			const updateAssistant = () => {
-				const parts: MessagePart[] = [];
-				if (currentText) {
-					parts.push({ type: 'text', text: currentText });
-				}
-
-				for (const tc of toolCalls.values()) {
-					parts.push({ type: 'tool-call', toolCall: tc });
-				}
-
 				setMessages(prev => {
 					const updated = [...prev];
 					const last = updated[updated.length - 1];
 					if (last && last.role === 'assistant') {
 						updated[updated.length - 1] = {
 							...last,
-							content: currentText,
-							parts,
+							parts: [...orderedParts],
 						};
 					}
 
@@ -95,53 +71,71 @@ export function useAgent(mode: Mode) {
 				});
 			};
 
+			const updateToolPart = (toolCallId: string, patch: Partial<DynamicToolUIPart>) => {
+				const idx = toolCallIndex.get(toolCallId);
+				if (idx !== undefined) {
+					orderedParts[idx] = { ...(orderedParts[idx] as DynamicToolUIPart), ...patch } as DynamicToolUIPart;
+				}
+			};
+
 			for await (const part of result.fullStream) {
 				switch (part.type) {
 					case 'text-delta': {
 						currentText += part.text;
+						const lastPart = orderedParts[orderedParts.length - 1];
+						if (lastPart && lastPart.type === 'text') {
+							orderedParts[orderedParts.length - 1] = { type: 'text', text: currentText };
+						} else {
+							orderedParts.push({ type: 'text', text: currentText });
+						}
 						updateAssistant();
 						break;
 					}
 
 					case 'tool-input-start': {
-						toolCalls.set(part.id, {
-							id: part.id,
+						const toolPart: DynamicToolUIPart = {
+							type: 'dynamic-tool',
+							toolCallId: part.id,
 							toolName: part.toolName,
-							args: {},
-							status: 'running',
-						});
+							state: 'input-streaming',
+							input: undefined,
+						};
+						toolCallIndex.set(part.id, orderedParts.length);
+						orderedParts.push(toolPart);
+						currentText = '';
 						updateAssistant();
 						break;
 					}
 
 					case 'tool-call': {
-						const existing = toolCalls.get((part as any).toolCallId);
-						if (existing) {
-							existing.args = (part as any).input as Record<string, any>;
-						}
-
+						updateToolPart(part.toolCallId, {
+							state: 'input-available',
+							input: part.input,
+						});
 						updateAssistant();
 						break;
 					}
 
 					case 'tool-result': {
-						const tc = toolCalls.get((part as any).toolCallId);
-						if (tc) {
-							tc.status = 'done';
-							tc.result = (part as any).output;
-						}
-
+						updateToolPart(part.toolCallId, {
+							state: 'output-available',
+							output: part.output,
+						});
 						updateAssistant();
 						break;
 					}
 
 					case 'tool-error': {
-						const tc2 = toolCalls.get((part as any).toolCallId);
-						if (tc2) {
-							tc2.status = 'error';
-							tc2.error = String((part as any).error ?? 'Tool execution failed');
+						const idx = toolCallIndex.get(part.toolCallId);
+						if (idx !== undefined) {
+							const tc = orderedParts[idx] as DynamicToolUIPart;
+							orderedParts[idx] = {
+								...tc,
+								state: 'output-error',
+								input: tc.input,
+								errorText: String(part.error ?? 'Tool execution failed'),
+							} as DynamicToolUIPart;
 						}
-
 						updateAssistant();
 						break;
 					}

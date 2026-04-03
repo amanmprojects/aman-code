@@ -1,32 +1,32 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import Markdown from './Markdown.js';
 import ToolCallStatus from './ToolCallStatus.js';
-import type { ChatMessage } from '../hooks/useAgent.js';
+import type { UIMessage } from 'ai';
 
 interface AssistantMessageProps {
-	message: ChatMessage;
+	message: UIMessage;
 }
 
 export default function AssistantMessage({ message }: AssistantMessageProps) {
 	return (
-		<Box flexDirection="column" marginBottom={1}>
+		<Box flexDirection="column">
 			<Text color="magenta" bold>
-				{'◆ '}Assistant
+				{'◆ '}
 			</Text>
 			{message.parts.map((part, i) => {
 				if (part.type === 'text' && part.text) {
 					return (
 						<Box key={`text-${i}`} marginLeft={2}>
-							<Markdown text={part.text} />
+							<Text>{part.text}</Text>
 						</Box>
 					);
 				}
 
-				if (part.type === 'tool-call' && part.toolCall) {
+
+				if (part.type === 'dynamic-tool') {
 					return (
 						<Box key={`tool-${i}`} marginLeft={2}>
-							<ToolCallStatus toolCall={part.toolCall} />
+							<ToolCallStatus toolPart={part} />
 						</Box>
 					);
 				}
