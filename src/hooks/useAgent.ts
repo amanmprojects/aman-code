@@ -44,14 +44,22 @@ export function useAgent(mode: Mode) {
 	const agentModeRef = useRef<Mode>(mode);
 	const messagesRef = useRef<UIMessage[]>([]);
 
-	useEffect(() => {
-		if (isLoading || agentModeRef.current === mode) {
+	const ensureAgentMode = useCallback(() => {
+		if (agentModeRef.current === mode) {
 			return;
 		}
 
 		agentRef.current = createAgent(mode);
 		agentModeRef.current = mode;
-	}, [mode, isLoading]);
+	}, [mode]);
+
+	useEffect(() => {
+		if (isLoading) {
+			return;
+		}
+
+		ensureAgentMode();
+	}, [isLoading, ensureAgentMode]);
 
 	const setConversation = useCallback((nextMessages: UIMessage[]) => {
 		messagesRef.current = nextMessages;
@@ -67,6 +75,8 @@ export function useAgent(mode: Mode) {
 		setConversation(baseMessages);
 
 		try {
+			ensureAgentMode();
+
 			const stream = await createAgentUIStream({
 				agent: agentRef.current,
 				uiMessages: baseMessages,
@@ -91,7 +101,7 @@ export function useAgent(mode: Mode) {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [setConversation]);
+	}, [ensureAgentMode, setConversation]);
 
 	return { messages, isLoading, error, sendMessage };
 }

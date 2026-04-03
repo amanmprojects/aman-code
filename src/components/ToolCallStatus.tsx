@@ -39,7 +39,7 @@ function formatArgs(toolName: string, args: Record<string, any>): string {
 }
 
 function formatResult(toolName: string, result: any): React.ReactNode {
-	if (!result) {
+	if (result == null) {
 		return null;
 	}
 
