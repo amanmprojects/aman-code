@@ -43,25 +43,17 @@ export function useAgent(mode: Mode) {
 			});
 
 			let currentText = '';
-			const toolCalls = new Map<string, DynamicToolUIPart>();
+			const orderedParts: UIMessage['parts'] = [];
+			const toolCallIndex = new Map<string, number>();
 
 			const updateAssistant = () => {
-				const parts: UIMessage['parts'] = [];
-				if (currentText) {
-					parts.push({ type: 'text', text: currentText });
-				}
-
-				for (const tc of toolCalls.values()) {
-					parts.push(tc);
-				}
-
 				setMessages(prev => {
 					const updated = [...prev];
 					const last = updated[updated.length - 1];
 					if (last && last.role === 'assistant') {
 						updated[updated.length - 1] = {
 							...last,
-							parts,
+							parts: [...orderedParts],
 						};
 					}
 
@@ -69,65 +61,71 @@ export function useAgent(mode: Mode) {
 				});
 			};
 
+			const updateToolPart = (toolCallId: string, patch: Partial<DynamicToolUIPart>) => {
+				const idx = toolCallIndex.get(toolCallId);
+				if (idx !== undefined) {
+					orderedParts[idx] = { ...(orderedParts[idx] as DynamicToolUIPart), ...patch } as DynamicToolUIPart;
+				}
+			};
+
 			for await (const part of result.fullStream) {
 				switch (part.type) {
 					case 'text-delta': {
 						currentText += part.text;
+						const lastPart = orderedParts[orderedParts.length - 1];
+						if (lastPart && lastPart.type === 'text') {
+							orderedParts[orderedParts.length - 1] = { type: 'text', text: currentText };
+						} else {
+							orderedParts.push({ type: 'text', text: currentText });
+						}
 						updateAssistant();
 						break;
 					}
 
 					case 'tool-input-start': {
-						toolCalls.set(part.id, {
+						const toolPart: DynamicToolUIPart = {
 							type: 'dynamic-tool',
 							toolCallId: part.id,
 							toolName: part.toolName,
 							state: 'input-streaming',
 							input: undefined,
-						});
+						};
+						toolCallIndex.set(part.id, orderedParts.length);
+						orderedParts.push(toolPart);
+						currentText = '';
 						updateAssistant();
 						break;
 					}
 
 					case 'tool-call': {
-						const existing = toolCalls.get(part.toolCallId);
-						if (existing) {
-							toolCalls.set(part.toolCallId, {
-								...existing,
-								state: 'input-available',
-								input: part.input,
-							} as DynamicToolUIPart);
-						}
-
+						updateToolPart(part.toolCallId, {
+							state: 'input-available',
+							input: part.input,
+						});
 						updateAssistant();
 						break;
 					}
 
 					case 'tool-result': {
-						const tc = toolCalls.get(part.toolCallId);
-						if (tc) {
-							toolCalls.set(part.toolCallId, {
-								...tc,
-								state: 'output-available',
-								output: part.output,
-							} as DynamicToolUIPart);
-						}
-
+						updateToolPart(part.toolCallId, {
+							state: 'output-available',
+							output: part.output,
+						});
 						updateAssistant();
 						break;
 					}
 
 					case 'tool-error': {
-						const tc2 = toolCalls.get(part.toolCallId);
-						if (tc2) {
-							toolCalls.set(part.toolCallId, {
-								...tc2,
+						const idx = toolCallIndex.get(part.toolCallId);
+						if (idx !== undefined) {
+							const tc = orderedParts[idx] as DynamicToolUIPart;
+							orderedParts[idx] = {
+								...tc,
 								state: 'output-error',
-								input: tc2.input,
+								input: tc.input,
 								errorText: String(part.error ?? 'Tool execution failed'),
-							} as DynamicToolUIPart);
+							} as DynamicToolUIPart;
 						}
-
 						updateAssistant();
 						break;
 					}

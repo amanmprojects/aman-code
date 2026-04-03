@@ -14,7 +14,7 @@ export default function MessageList({ messages }: MessageListProps) {
 			{messages.map((msg, i) => {
 				if (msg.role === 'user') {
 					return (
-						<Box key={i} flexDirection='row' borderStyle='round'>
+						<Box key={msg.id} flexDirection='row' borderStyle='round'>
 								<Text color="green" bold>
 									{'❯ '}
 								</Text>
@@ -23,7 +23,7 @@ export default function MessageList({ messages }: MessageListProps) {
 					);
 				}
 
-				return <AssistantMessage key={i} message={msg} />;
+				return <AssistantMessage key={msg.id} message={msg} />;
 			})}
 		</Box>
 	);
