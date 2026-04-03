@@ -525,16 +525,16 @@ export const grepSearch = tool({
 				offset,
 			);
 			const relativeMatches = limitedMatches.map(toRelativePath);
-			const limitInfo = formatLimitInfo(
-				appliedLimit,
-				offset > 0 ? offset : undefined,
-			);
+				const limitInfo = formatLimitInfo(
+					appliedLimit,
+					offset > 0 ? offset : undefined,
+				);
 
-			if (relativeMatches.length === 0) {
-				return {
-					pattern,
-					path: toRelativePath(resolved),
-					outputMode,
+				if (sortedMatches.length === 0) {
+					return {
+						pattern,
+						path: toRelativePath(resolved),
+						outputMode,
 					numFiles: 0,
 					filenames: [],
 					matchCount: 0,
@@ -546,15 +546,15 @@ export const grepSearch = tool({
 
 			const isTruncated = offset + relativeMatches.length < sortedMatches.length;
 
-			return {
-				pattern,
-				path: toRelativePath(resolved),
-				outputMode,
-				numFiles: relativeMatches.length,
-				matchCount: relativeMatches.length,
-				matches: relativeMatches,
-				truncated: isTruncated,
-				filenames: relativeMatches,
+				return {
+					pattern,
+					path: toRelativePath(resolved),
+					outputMode,
+					numFiles: sortedMatches.length,
+					matchCount: sortedMatches.length,
+					matches: relativeMatches,
+					truncated: isTruncated,
+					filenames: relativeMatches,
 				...(appliedLimit !== undefined && {appliedLimit}),
 				...(offset > 0 && {appliedOffset: offset}),
 				...(limitInfo && {paginationInfo: limitInfo}),

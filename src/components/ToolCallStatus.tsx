@@ -244,15 +244,16 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 		}
 
 		case 'grepSearch':
+			const grepMatches = Array.isArray(result.matches)
+				? result.matches.join('\n')
+				: '';
 			return (
 				<Box flexDirection="column">
 					<Text dimColor>
 						{result.matchCount} match{result.matchCount === 1 ? '' : 'es'}
 						{result.truncated ? ' (truncated)' : ''}
 					</Text>
-					{result.matches && (
-						<Text>{String(result.matches).slice(0, 500)}</Text>
-					)}
+					{grepMatches && <Text>{grepMatches.slice(0, 500)}</Text>}
 				</Box>
 			);
 		case 'globSearch':
@@ -345,8 +346,13 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 		toolPart.state === 'input-streaming' ||
 		toolPart.state === 'input-available';
 	const isAwaitingApproval = toolPart.state === 'approval-requested';
-	const isApprovalResponded = toolPart.state === 'approval-responded';
-	const isDenied = toolPart.state === 'output-denied';
+	const isApprovalResponded =
+		toolPart.state === 'approval-responded' &&
+		toolPart.approval?.approved !== false;
+	const isDenied =
+		toolPart.state === 'output-denied' ||
+		(toolPart.state === 'approval-responded' &&
+			toolPart.approval?.approved === false);
 	const isDone = toolPart.state === 'output-available';
 	const isError = toolPart.state === 'output-error';
 
@@ -394,11 +400,11 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 						{formatResult(toolName, toolPart.output as any)}
 					</Box>
 				)}
-			{isDenied && toolPart.state === 'output-denied' && (
-				<Box marginLeft={2}>
-					<Text color="yellow">
-						{toolPart.approval?.reason ?? 'Tool execution denied.'}
-					</Text>
+				{isDenied && (
+					<Box marginLeft={2}>
+						<Text color="yellow">
+							{toolPart.approval?.reason ?? 'Tool execution denied.'}
+						</Text>
 				</Box>
 			)}
 			{isError && toolPart.state === 'output-error' && toolPart.errorText && (
