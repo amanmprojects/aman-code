@@ -4,6 +4,7 @@ import {execa, type ExecaError} from 'execa';
 import treeKill from 'tree-kill';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import {getExecuteCommandDescription, DEFAULT_TIMEOUT_MS} from './prompt.js';
 
 const DANGEROUS_PATTERNS = [
 	/rm\s+(-[a-zA-Z]*)?r[a-zA-Z]*f?\s+\/(?!\S)/,
@@ -20,12 +21,8 @@ const DANGEROUS_PATTERNS = [
 	/>(\/etc\/passwd|\/etc\/shadow)/,
 ];
 
-const MS_IN_SECOND = 1000;
-const SECONDS_IN_MINUTE = 60;
-const DEFAULT_TIMEOUT_MS = 10 * SECONDS_IN_MINUTE * MS_IN_SECOND; // 10 minutes for bun install etc.
 const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
 
-const SIGKILL = 137;
 const SIGTERM = 143;
 
 type CommandClassification = 'read' | 'search' | 'mutating' | 'unknown';
@@ -43,10 +40,10 @@ const SEARCH_COMMAND_PATTERNS = [/^\s*(grep|rg|find|fd)\b/i];
  * Classifies a shell command as one of four categories describing its likely effect.
  *
  * @param command - The shell command string to classify.
- * @returns The classification: `search` if the command matches known search patterns,
- * `read` if it matches known read-only patterns, `mutating` if it matches dangerous patterns
- * or contains common file/package/modification tools (e.g., `mv`, `cp`, `sed`, `python`, `npm`, `git`, `chmod`),
- * and `unknown` if none of the above apply.
+ * @returns The classification: \`search\` if the command matches known search patterns,
+ * \`read\` if it matches known read-only patterns, \`mutating\` if it matches dangerous patterns
+ * or contains common file/package/modification tools (e.g., \`mv\`, \`cp\`, \`sed\`, \`python\`, \`npm\`, \`git\`, \`chmod\`),
+ * and \`unknown\` if none of the above apply.
  */
 function classifyCommand(command: string): CommandClassification {
 	if (SEARCH_COMMAND_PATTERNS.some(pattern => pattern.test(command))) {
@@ -69,10 +66,10 @@ function classifyCommand(command: string): CommandClassification {
 }
 
 /**
- * Appends `chunk` to `current` while ensuring the result does not exceed `limit` characters.
+ * Appends \`chunk\` to \`current\` while ensuring the result does not exceed \`limit\` characters.
  *
- * @param limit - The maximum allowed length of the returned `text` in characters.
- * @returns An object with `text` containing the concatenated (and possibly truncated) result, and `truncated` — `true` if part of `chunk` was omitted or if `current` already met the limit, `false` otherwise.
+ * @param limit - The maximum allowed length of the returned \`text\` in characters.
+ * @returns An object with \`text\` containing the concatenated (and possibly truncated) result, and \`truncated\` — \`true\` if part of \`chunk\` was omitted or if \`current\` already met the limit, \`false\` otherwise.
  */
 function appendBoundedText(
 	current: string,
@@ -123,15 +120,14 @@ function formatDuration(ms: number): string {
  * Tests the provided shell command string against the configured dangerous patterns.
  *
  * @param command - The shell command to evaluate
- * @returns `true` if the command matches any configured dangerous pattern, `false` otherwise.
+ * @returns \`true\` if the command matches any configured dangerous pattern, \`false\` otherwise.
  */
 export function isDangerousCommand(command: string): boolean {
 	return DANGEROUS_PATTERNS.some(pattern => pattern.test(command));
 }
 
 export const executeCommand = tool({
-	description:
-		'Execute a shell command and return its output. Supports bounded output, optional background execution, and timeout controls. Optimized for long-running commands like package installs.',
+	description: getExecuteCommandDescription(),
 	inputSchema: z.object({
 		command: z.string().describe('The shell command to execute'),
 		cwd: z
@@ -165,15 +161,13 @@ export const executeCommand = tool({
 				'If true, start the command in the background and return immediately.',
 			),
 	}),
-	execute: async (
-		{
-			command,
-			cwd,
-			timeoutMs = DEFAULT_TIMEOUT_MS,
-			maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
-			background = false,
-		},
-	) => {
+	execute: async ({
+		command,
+		cwd,
+		timeoutMs = DEFAULT_TIMEOUT_MS,
+		maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
+		background = false,
+	}) => {
 		const resolvedCwd = cwd ? path.resolve(cwd) : process.cwd();
 		const classification = classifyCommand(command);
 
@@ -197,6 +191,23 @@ export const executeCommand = tool({
 					env: process.env,
 					reject: false,
 				});
+
+				if (subprocess.pid === undefined) {
+					const errorMessage =
+						'Failed to start background command: subprocess did not provide a PID.';
+					return {
+						command,
+						cwd: resolvedCwd,
+						classification,
+						background: true,
+						pid: null,
+						startedAt,
+						stdout: '',
+						stderr: errorMessage,
+						exitCode: 1,
+						error: errorMessage,
+					};
+				}
 
 				// Unref the subprocess so it doesn't block the event loop
 				subprocess.unref?.();
@@ -231,6 +242,7 @@ export const executeCommand = tool({
 			let stdoutTruncated = false;
 			let stderrTruncated = false;
 			let timedOut = false;
+			let killedByTimeout = false;
 			let exitCode: number | null = null;
 
 			// Use execa with streaming for bounded output
@@ -241,6 +253,7 @@ export const executeCommand = tool({
 
 			const timeoutHandler = () => {
 				timedOut = true;
+				killedByTimeout = true;
 				if (subprocess.pid) {
 					treeKill(subprocess.pid, 'SIGTERM');
 				}
@@ -279,15 +292,10 @@ export const executeCommand = tool({
 			exitCode = result.exitCode ?? (result.timedOut ? SIGTERM : 1);
 
 			// Prepend timeout message if timed out
-			if (result.timedOut || timedOut) {
+			if (result.timedOut || killedByTimeout) {
 				stderr = `Command timed out after ${formatDuration(
 					timeoutMs,
 				)}\n${stderr}`;
-			}
-
-			// Handle kill signals
-			if (exitCode === SIGKILL || exitCode === SIGTERM || result.signal) {
-				timedOut = true;
 			}
 
 			return {
@@ -297,7 +305,7 @@ export const executeCommand = tool({
 				background: false,
 				durationMs: Date.now() - startedAt,
 				timeoutMs,
-				timedOut,
+				timedOut: timedOut || Boolean(result.timedOut),
 				aborted: false,
 				stdout: stdout.trimEnd(),
 				stderr: stderr.trimEnd(),

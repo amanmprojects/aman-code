@@ -2,7 +2,8 @@ import {tool} from 'ai';
 import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
+import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {getListDirDescription} from './prompt.js';
 
 const DEFAULT_LIMIT = 200;
 
@@ -15,6 +16,8 @@ type DirectoryEntryResult = {
 	size: number | null;
 	children: number | null;
 };
+
+const ENTRY_PROCESSING_CONCURRENCY = 10;
 
 /**
  * Produce a display-friendly path: use a path relative to the current working directory with POSIX (`/`) separators when `targetPath` is inside the cwd; otherwise return `targetPath` unchanged.
@@ -68,9 +71,38 @@ function getEntryType(stat: Awaited<ReturnType<typeof fs.lstat>>): EntryType {
 	return 'other';
 }
 
+async function mapWithConcurrency<T, U>(
+	items: T[],
+	concurrency: number,
+	mapper: (item: T) => Promise<U>,
+): Promise<U[]> {
+	const results = new Array<U>(items.length);
+	let nextIndex = 0;
+
+	async function worker(): Promise<void> {
+		while (true) {
+			const currentIndex = nextIndex;
+			nextIndex += 1;
+
+			if (currentIndex >= items.length) {
+				return;
+			}
+
+			results[currentIndex] = await mapper(items[currentIndex]!);
+		}
+	}
+
+	await Promise.all(
+		Array.from({length: Math.min(concurrency, items.length)}, async () =>
+			worker(),
+		),
+	);
+
+	return results;
+}
+
 export const listDir = tool({
-	description:
-		'List the files and directories inside a directory, including lightweight metadata like entry type and size.',
+	description: getListDirDescription(),
 	inputSchema: z.object({
 		path: z
 			.string()
@@ -134,8 +166,10 @@ export const listDir = tool({
 			);
 			const selectedEntries = sortedEntries.slice(0, limit);
 
-			const results = await Promise.all(
-				selectedEntries.map(async (entry): Promise<DirectoryEntryResult> => {
+			const results = await mapWithConcurrency(
+				selectedEntries,
+				ENTRY_PROCESSING_CONCURRENCY,
+				async (entry): Promise<DirectoryEntryResult> => {
 					const absoluteEntryPath = path.join(resolvedPath, entry.name);
 
 					try {
@@ -161,7 +195,7 @@ export const listDir = tool({
 							children: null,
 						};
 					}
-				}),
+				},
 			);
 
 			return {
@@ -178,8 +212,10 @@ export const listDir = tool({
 				};
 			}
 
+			const message =
+				typeof error?.message === 'string' ? error.message : String(error);
 			return {
-				error: `Failed to list directory: ${error.message}`,
+				error: `Failed to list directory: ${message}`,
 			};
 		}
 	},

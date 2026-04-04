@@ -3,11 +3,25 @@ import {z} from 'zod';
 import {execFile} from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
+import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {applyHeadLimit, getPreStatLimit} from '../../utils/headLimit.js';
+import {getGrepSearchDescription} from './prompt.js';
 
-const VCS_DIRECTORIES_TO_EXCLUDE = ['.git', '.svn', '.hg', '.bzr', '.jj', '.sl'];
-const DEFAULT_HEAD_LIMIT = 250;
-const EXCLUDED_DIRECTORIES = ['node_modules', 'dist', 'build', '.next', '.cache'];
+const VCS_DIRECTORIES_TO_EXCLUDE = [
+	'.git',
+	'.svn',
+	'.hg',
+	'.bzr',
+	'.jj',
+	'.sl',
+];
+const EXCLUDED_DIRECTORIES = [
+	'node_modules',
+	'dist',
+	'build',
+	'.next',
+	'.cache',
+];
 
 type RipgrepTextField = {
 	text?: string;
@@ -31,29 +45,6 @@ type ParsedRipgrepRecord = {
 	text: string;
 	submatchCount: number;
 };
-
-function applyHeadLimit<T>(
-	items: T[],
-	limit: number | undefined,
-	offset: number = 0,
-): {items: T[]; appliedLimit: number | undefined; wasTruncated: boolean} {
-	if (limit === 0) {
-		return {
-			items: items.slice(offset),
-			appliedLimit: undefined,
-			wasTruncated: false,
-		};
-	}
-
-	const effectiveLimit = limit ?? DEFAULT_HEAD_LIMIT;
-	const sliced = items.slice(offset, offset + effectiveLimit);
-	const wasTruncated = items.length - offset > effectiveLimit;
-	return {
-		items: sliced,
-		appliedLimit: wasTruncated ? effectiveLimit : undefined,
-		wasTruncated,
-	};
-}
 
 function toRelativePath(filePath: string): string {
 	const relativePath = path.relative(process.cwd(), filePath);
@@ -186,8 +177,7 @@ function searchPathError(targetPath: string, kind: 'unc' | 'device') {
 }
 
 export const grepSearch = tool({
-	description:
-		'A powerful search tool built on ripgrep. Search for a pattern (regex or fixed string) across files in a directory. Supports multiple output modes, context lines, pagination, and more.',
+	description: getGrepSearchDescription(),
 	inputSchema: z.object({
 		pattern: z
 			.string()
@@ -496,10 +486,17 @@ export const grepSearch = tool({
 			}
 
 			const lines = stdout.trim().split('\n').filter(Boolean);
+			const preStatLimit = getPreStatLimit(headLimit, offset);
+			// Avoid stat'ing every rg result when the caller only needs a paginated page.
+			const candidateMatches =
+				preStatLimit === undefined
+					? lines
+					: applyHeadLimit(lines, preStatLimit).items;
+			const pagination = applyHeadLimit(lines, headLimit, offset);
 			const stats = await Promise.allSettled(
-				lines.map(filePath => fs.stat(filePath)),
+				candidateMatches.map(filePath => fs.stat(filePath)),
 			);
-			const sortedMatches = lines
+			const sortedMatches = candidateMatches
 				.map((filePath, index) => {
 					const result = stats[index]!;
 					const mtimeMs =
@@ -525,16 +522,16 @@ export const grepSearch = tool({
 				offset,
 			);
 			const relativeMatches = limitedMatches.map(toRelativePath);
-				const limitInfo = formatLimitInfo(
-					appliedLimit,
-					offset > 0 ? offset : undefined,
-				);
+			const limitInfo = formatLimitInfo(
+				appliedLimit,
+				offset > 0 ? offset : undefined,
+			);
 
-				if (sortedMatches.length === 0) {
-					return {
-						pattern,
-						path: toRelativePath(resolved),
-						outputMode,
+			if (sortedMatches.length === 0) {
+				return {
+					pattern,
+					path: toRelativePath(resolved),
+					outputMode,
 					numFiles: 0,
 					filenames: [],
 					matchCount: 0,
@@ -544,17 +541,17 @@ export const grepSearch = tool({
 				};
 			}
 
-			const isTruncated = offset + relativeMatches.length < sortedMatches.length;
+			const isTruncated = pagination.wasTruncated;
 
-				return {
-					pattern,
-					path: toRelativePath(resolved),
-					outputMode,
-					numFiles: sortedMatches.length,
-					matchCount: sortedMatches.length,
-					matches: relativeMatches,
-					truncated: isTruncated,
-					filenames: relativeMatches,
+			return {
+				pattern,
+				path: toRelativePath(resolved),
+				outputMode,
+				numFiles: lines.length,
+				matchCount: lines.length,
+				matches: relativeMatches,
+				truncated: isTruncated,
+				filenames: relativeMatches,
 				...(appliedLimit !== undefined && {appliedLimit}),
 				...(offset > 0 && {appliedOffset: offset}),
 				...(limitInfo && {paginationInfo: limitInfo}),

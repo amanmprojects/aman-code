@@ -2,7 +2,8 @@ import {tool} from 'ai';
 import {z} from 'zod';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
+import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {getGlobSearchDescription} from './prompt.js';
 
 const DEFAULT_LIMIT = 100;
 const EXCLUDED_DIRECTORIES = new Set(['node_modules', '.git', 'dist']);
@@ -82,8 +83,8 @@ function toDisplayPath(filePath: string): string {
  * Determines whether an item matches the requested search type.
  *
  * @param type - The desired search type: 'file', 'directory', or 'any'
- * @param isDirectory - `true` if the item is a directory, `false` if it is a file
- * @returns `true` if the item matches `type` (`true` for 'any'; for 'directory' when `isDirectory` is `true`; for 'file' when `isDirectory` is `false`), `false` otherwise
+ * @param isDirectory - \`true\` if the item is a directory, \`false\` if it is a file
+ * @returns \`true\` if the item matches \`type\` (\`true\` for 'any'; for 'directory' when \`isDirectory\` is \`true\`; for 'file' when \`isDirectory\` is \`false\`), \`false\` otherwise
  */
 function matchesType(type: SearchType, isDirectory: boolean): boolean {
 	if (type === 'any') {
@@ -97,26 +98,26 @@ function matchesType(type: SearchType, isDirectory: boolean): boolean {
  * Checks whether a string matches at least one regular expression from a list.
  *
  * @param value - The string to test against the patterns
- * @param patterns - Array of `RegExp` objects to test `value` against
- * @returns `true` if any pattern matches `value`, `false` otherwise
+ * @param patterns - Array of \`RegExp\` objects to test \`value\` against
+ * @returns \`true\` if any pattern matches \`value\`, \`false\` otherwise
  */
 function matchesAnyPattern(value: string, patterns: RegExp[]): boolean {
 	return patterns.some(pattern => pattern.test(value));
 }
 
 /**
- * Recursively collects filesystem entries under `currentPath` whose paths (relative to `rootPath`) match `pattern` and `searchType`, returning each match with its modification time.
+ * Recursively collects filesystem entries under \`currentPath\` whose paths (relative to \`rootPath\`) match \`pattern\` and \`searchType\`, returning each match with its modification time.
  *
- * Skips symbolic links and directories named in `EXCLUDED_DIRECTORIES`. Paths are compared against `excludePatterns` using the relative path from `rootPath` with forward-slash separators. When `maxDepth` is provided, it is inclusive relative to `rootPath`: `0` searches only direct children of `rootPath`, `1` includes one nested directory level, and so on.
+ * Skips symbolic links and directories named in \`EXCLUDED_DIRECTORIES\`. Paths are compared against \`excludePatterns\` using the relative path from \`rootPath\` with forward-slash separators. When \`maxDepth\` is provided, it is inclusive relative to \`rootPath\`: \`0\` searches only direct children of \`rootPath\`, \`1\` includes one nested directory level, and so on.
  *
  * @param options.rootPath - Base directory used to compute relative paths for matching and exclusions
  * @param options.currentPath - Directory to search in this call (may be a nested directory during recursion)
  * @param options.pattern - Regex that candidate relative paths must match to be included
  * @param options.excludePatterns - Regexes that, if any match a relative path, cause that entry (and its subtree) to be skipped
  * @param options.searchType - Controls whether to include files, directories, or both
- * @param options.maxDepth - Optional maximum recursion depth relative to `rootPath`; inclusive, with `0` meaning direct children only
- * @param options.depth - Current recursion depth; 0 corresponds to `rootPath`
- * @returns An array of objects each containing `filePath` (absolute path to the match) and `mtimeMs` (its modification time in milliseconds)
+ * @param options.maxDepth - Optional maximum recursion depth relative to \`rootPath\`; inclusive, with \`0\` meaning direct children only
+ * @param options.depth - Current recursion depth; 0 corresponds to \`rootPath\`
+ * @returns An array of objects each containing \`filePath\` (absolute path to the match) and \`mtimeMs\` (its modification time in milliseconds)
  */
 async function collectMatches(options: {
 	rootPath: string;
@@ -138,6 +139,11 @@ async function collectMatches(options: {
 		depth,
 		stopAfter,
 	} = options;
+
+	if (maxDepth !== undefined && depth > maxDepth) {
+		return [];
+	}
+
 	const entries = await fs.readdir(currentPath, {withFileTypes: true});
 	const matches: Array<{filePath: string; mtimeMs: number}> = [];
 
@@ -158,10 +164,6 @@ async function collectMatches(options: {
 		const nextDepth = depth + 1;
 
 		if (matchesAnyPattern(relativePath, excludePatterns)) {
-			continue;
-		}
-
-		if (maxDepth !== undefined && depth > maxDepth) {
 			continue;
 		}
 
@@ -204,8 +206,7 @@ async function collectMatches(options: {
 }
 
 export const globSearch = tool({
-	description:
-		'Fast file pattern matching tool that works across codebases. Supports glob patterns like "**/*.js" or "src/**/*.ts" and returns matching paths sorted by modification time.',
+	description: getGlobSearchDescription(),
 	inputSchema: z.object({
 		pattern: z
 			.string()

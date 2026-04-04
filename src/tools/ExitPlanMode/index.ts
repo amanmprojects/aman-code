@@ -1,9 +1,9 @@
-import { tool } from 'ai';
-import { z } from 'zod';
+import {tool} from 'ai';
+import {z} from 'zod';
+import {getExitPlanModeDescription} from './prompt.js';
 
 export const exitPlanMode = tool({
-	description:
-		'Ask the user to confirm leaving plan mode and beginning implementation work.',
+	description: getExitPlanModeDescription(),
 	inputSchema: z.object({
 		planSummary: z
 			.string()
@@ -20,7 +20,7 @@ export const exitPlanMode = tool({
 		message: z.string(),
 	}),
 	needsApproval: true,
-	execute: async ({ planSummary, targetMode = 'code' }) => {
+	execute: async ({planSummary, targetMode = 'code'}) => {
 		return {
 			approved: true,
 			targetMode,

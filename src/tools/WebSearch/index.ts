@@ -1,18 +1,18 @@
-import { tool } from 'ai';
-import { tavilySearch } from '@tavily/ai-sdk';
-import { z } from 'zod';
+import {tool} from 'ai';
+import {tavilySearch} from '@tavily/ai-sdk';
+import {z} from 'zod';
+import {getWebSearchDescription} from './prompt.js';
 
 const tavilyTool = tavilySearch();
 
 export const webSearch = tool({
-	description:
-		'Search the web for up-to-date information using Tavily and return relevant results with snippets and source URLs.',
+	description: getWebSearchDescription(),
 	inputSchema: z.object({
 		query: z.string().describe('The search query to look up on the web.'),
 		searchDepth: z
 			.enum(['basic', 'advanced', 'fast', 'ultra-fast'])
 			.optional()
-			.describe('The search depth to use. Defaults to Tavily\'s default.'),
+			.describe("The search depth to use. Defaults to Tavily's default."),
 		timeRange: z
 			.enum(['year', 'month', 'week', 'day', 'y', 'm', 'w', 'd'])
 			.optional()
@@ -35,9 +35,15 @@ export const webSearch = tool({
 
 		try {
 			return await execute(input, options);
-		} catch (error: any) {
+		} catch (error: unknown) {
+			const message =
+				error instanceof Error
+					? error.message
+					: typeof error === 'string'
+					? error
+					: String(error);
 			return {
-				error: `Web search failed: ${error.message}`,
+				error: `Web search failed: ${message}`,
 			};
 		}
 	},

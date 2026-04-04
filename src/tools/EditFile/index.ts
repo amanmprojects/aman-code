@@ -3,7 +3,8 @@ import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {createPatch} from 'diff';
-import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
+import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {getEditFileDescription} from './prompt.js';
 
 /**
  * Detects the line ending style used in the given text.
@@ -61,8 +62,7 @@ function countOccurrences(content: string, search: string): number {
 }
 
 export const editFile = tool({
-	description:
-		'Make a targeted edit to a file by replacing an exact string match with new content. The oldString must match exactly, including whitespace and indentation. For creating new files, use writeFile instead.',
+	description: getEditFileDescription(),
 	inputSchema: z.object({
 		filePath: z
 			.string()
@@ -127,6 +127,9 @@ export const editFile = tool({
 				};
 			}
 
+			const lineEnding = detectLineEnding(original);
+			const normalizedOldString = normalizeLineEndings(oldString, lineEnding);
+
 			if (oldString.length === 0) {
 				return {
 					error:
@@ -134,14 +137,14 @@ export const editFile = tool({
 				};
 			}
 
-			if (!original.includes(oldString)) {
+			if (!original.includes(normalizedOldString)) {
 				return {
 					error:
 						'oldString not found in file. Make sure it matches exactly, including whitespace, indentation, and line endings.',
 				};
 			}
 
-			const occurrenceCount = countOccurrences(original, oldString);
+			const occurrenceCount = countOccurrences(original, normalizedOldString);
 
 			if (!replaceAll && occurrenceCount > 1) {
 				return {
@@ -150,12 +153,11 @@ export const editFile = tool({
 				};
 			}
 
-			const lineEnding = detectLineEnding(original);
 			const normalizedNewString = normalizeLineEndings(newString, lineEnding);
 
 			const updated = replaceAll
-				? original.split(oldString).join(normalizedNewString)
-				: original.replace(oldString, normalizedNewString);
+				? original.split(normalizedOldString).join(normalizedNewString)
+				: original.replace(normalizedOldString, normalizedNewString);
 
 			await fs.writeFile(resolved, updated, 'utf-8');
 

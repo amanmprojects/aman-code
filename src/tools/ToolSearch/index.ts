@@ -1,6 +1,7 @@
 import {tool} from 'ai';
 import {z} from 'zod';
-import {allToolNames, getToolMetadata, type ToolName} from './toolMetadata.js';
+import {allToolNames, getToolMetadata, type ToolName} from '../toolMetadata.js';
+import {getToolSearchDescription} from './prompt.js';
 
 /**
  * Converts the input string into lowercase alphanumeric tokens.
@@ -20,7 +21,7 @@ function tokenize(value: string): string[] {
  *
  * @param name - The tool's identifier
  * @param query - The search text to match against the tool's name and description
- * @returns A numeric relevance score: `0` if metadata is missing, `1` if `query` is empty after trimming, `100` if the query appears as a full substring of the tool's name+description, otherwise a positive integer derived from token matches (higher is more relevant)
+ * @returns A numeric relevance score: \`0\` if metadata is missing, \`1\` if \`query\` is empty after trimming, \`100\` if the query appears as a full substring of the tool's name+description, otherwise a positive integer derived from token matches (higher is more relevant)
  */
 function scoreTool(name: ToolName, query: string): number {
 	const metadata = getToolMetadata(name);
@@ -61,8 +62,7 @@ function scoreTool(name: ToolName, query: string): number {
 }
 
 export const toolSearch = tool({
-	description:
-		'Search the available tools by name, description, mode support, or interaction style to discover the right capability to use.',
+	description: getToolSearchDescription(),
 	inputSchema: z.object({
 		query: z
 			.string()

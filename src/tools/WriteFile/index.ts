@@ -2,11 +2,11 @@ import {tool} from 'ai';
 import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
+import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {getWriteFileDescription} from './prompt.js';
 
 export const writeFile = tool({
-	description:
-		'Create a new file or overwrite an existing file only when explicitly allowed. Use editFile for partial modifications instead.',
+	description: getWriteFileDescription(),
 	inputSchema: z.object({
 		filePath: z
 			.string()
@@ -23,7 +23,6 @@ export const writeFile = tool({
 		try {
 			const resolved = path.resolve(filePath);
 			const dir = path.dirname(resolved);
-			let existed = false;
 
 			if (isUNCPath(resolved)) {
 				return {
@@ -40,43 +39,30 @@ export const writeFile = tool({
 			await fs.mkdir(dir, {recursive: true});
 
 			try {
-				const existingStat = await fs.stat(resolved);
-				if (existingStat.isDirectory()) {
+				await fs.writeFile(resolved, content, {
+					encoding: 'utf-8',
+					flag: overwrite ? 'w' : 'wx',
+				});
+			} catch (error: any) {
+				if (error?.code === 'EEXIST') {
+					return {
+						error: `File already exists: ${resolved}. Re-run writeFile with overwrite: true to replace it, or use editFile for a targeted change.`,
+					};
+				}
+
+				if (error?.code === 'EISDIR') {
 					return {
 						error: `Cannot write file because the path is a directory: ${resolved}`,
 					};
 				}
 
-				existed = true;
-			} catch (error: any) {
-				if (error?.code !== 'ENOENT') {
-					throw error;
-				}
-			}
-
-			if (!overwrite) {
-				try {
-					await fs.writeFile(resolved, content, {
-						encoding: 'utf-8',
-						flag: 'wx',
-					});
-				} catch (error: any) {
-					if (error?.code === 'EEXIST') {
-						return {
-							error: `File already exists: ${resolved}. Re-run writeFile with overwrite: true to replace it, or use editFile for a targeted change.`,
-						};
-					}
-
-					throw error;
-				}
-			} else {
-				await fs.writeFile(resolved, content, 'utf-8');
+				throw error;
 			}
 
 			const lines = content.split('\n').length;
 			return {
 				filePath: resolved,
-				action: existed ? 'overwritten' : 'created',
+				action: overwrite ? 'written' : 'created',
 				overwrite,
 				lines,
 				bytes: Buffer.byteLength(content, 'utf-8'),

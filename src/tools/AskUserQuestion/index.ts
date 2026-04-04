@@ -1,5 +1,6 @@
-import { tool } from 'ai';
-import { z } from 'zod';
+import {tool} from 'ai';
+import {z} from 'zod';
+import {getAskUserQuestionDescription} from './prompt.js';
 
 const questionOptionSchema = z.object({
 	id: z.string().describe('Stable identifier for this option.'),
@@ -11,8 +12,7 @@ const questionOptionSchema = z.object({
 });
 
 export const askUserQuestion = tool({
-	description:
-		'Ask the user a structured question with predefined options and wait for a selection before continuing.',
+	description: getAskUserQuestionDescription(),
 	inputSchema: z.object({
 		question: z.string().describe('The question to present to the user.'),
 		options: z

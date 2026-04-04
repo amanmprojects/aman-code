@@ -3,7 +3,8 @@ import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import {createReadStream, type Stats} from 'node:fs';
 import * as path from 'node:path';
-import {isBlockedDevicePath, isUNCPath} from './pathGuards.js';
+import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {getReadFileDescription} from './prompt.js';
 
 // Maximum file size for full reads (256KB)
 const MAX_FILE_SIZE_BYTES = 256 * 1024;
@@ -157,10 +158,7 @@ async function findSimilarFiles(
  * @param cwd - The base directory used to compute a relative path (typically `process.cwd()`)
  * @returns The relative path with `/` as separators when `targetPath` is within `cwd`, `null` otherwise
  */
-function suggestPathUnderCwd(
-	targetPath: string,
-	cwd: string,
-): string | null {
+function suggestPathUnderCwd(targetPath: string, cwd: string): string | null {
 	// If the path doesn't exist, try to suggest a path relative to cwd
 	const relativePath = path.relative(cwd, targetPath);
 	if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
@@ -170,8 +168,7 @@ function suggestPathUnderCwd(
 }
 
 export const readFile = tool({
-	description:
-		'Read the contents of a file at the specified path. Returns the file contents with line numbers. Use this to understand existing code before making changes.',
+	description: getReadFileDescription(),
 	inputSchema: z.object({
 		filePath: z
 			.string()
@@ -206,7 +203,7 @@ export const readFile = tool({
 				};
 			}
 
-			// Check if path exists (using lstat to detect symlinks)
+			// Check if path exists, preserving enough detail to handle symlinks safely.
 			let stat: Stats;
 			try {
 				stat = await fs.lstat(resolved);
@@ -237,11 +234,8 @@ export const readFile = tool({
 				return {error: `Path is a directory, not a file: ${resolved}`};
 			}
 
-			// Check if it's a symbolic link
 			if (stat.isSymbolicLink()) {
-				return {
-					error: `Cannot read symbolic link: ${resolved}. Resolve the link first.`,
-				};
+				stat = await fs.stat(resolved);
 			}
 
 			if (!stat.isFile()) {

@@ -1,5 +1,6 @@
 import {tool} from 'ai';
 import {z} from 'zod';
+import {getTodoWriteDescription} from './prompt.js';
 
 const todoItemSchema = z.object({
 	id: z.string().describe('Unique identifier for the todo item.'),
@@ -9,8 +10,7 @@ const todoItemSchema = z.object({
 });
 
 export const todoWrite = tool({
-	description:
-		'Create or update a structured todo list so the agent can track multi-step work with explicit status and priority fields.',
+	description: getTodoWriteDescription(),
 	inputSchema: z.object({
 		todos: z
 			.array(todoItemSchema)
@@ -24,7 +24,6 @@ export const todoWrite = tool({
 	}),
 	execute: async ({todos}) => {
 		const todoList = new Map<string, z.infer<typeof todoItemSchema>>();
-		todoList.clear();
 		for (const todo of todos) {
 			todoList.set(todo.id, todo);
 		}
