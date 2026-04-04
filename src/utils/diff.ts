@@ -1,22 +1,28 @@
-import { structuredPatch } from 'diff';
+import {structuredPatch} from 'diff';
 
-export interface DiffLine {
+export type DiffLine = {
 	type: 'add' | 'remove' | 'context' | 'header';
 	content: string;
-}
+};
 
 export function parseDiff(diffString: string): DiffLine[] {
 	const lines: DiffLine[] = [];
 
 	for (const line of diffString.split('\n')) {
 		if (line.startsWith('@@')) {
-			lines.push({ type: 'header', content: line });
-		} else if (line.startsWith('+') && !(line === '+++' || line.startsWith('+++ '))) {
-			lines.push({ type: 'add', content: line });
-		} else if (line.startsWith('-') && !(line === '---' || line.startsWith('--- '))) {
-			lines.push({ type: 'remove', content: line });
+			lines.push({type: 'header', content: line});
+		} else if (
+			line.startsWith('+') &&
+			!(line === '+++' || line.startsWith('+++ '))
+		) {
+			lines.push({type: 'add', content: line});
+		} else if (
+			line.startsWith('-') &&
+			!(line === '---' || line.startsWith('--- '))
+		) {
+			lines.push({type: 'remove', content: line});
 		} else if (line.startsWith(' ')) {
-			lines.push({ type: 'context', content: line });
+			lines.push({type: 'context', content: line});
 		}
 	}
 
@@ -28,11 +34,17 @@ export function generateDiff(
 	oldContent: string,
 	newContent: string,
 ): string {
-	const patch = structuredPatch(fileName, fileName, oldContent, newContent, 'original', 'modified');
+	const patch = structuredPatch(
+		fileName,
+		fileName,
+		oldContent,
+		newContent,
+		'original',
+		'modified',
+	);
 	const lines: string[] = [];
 
-	lines.push(`--- ${patch.oldFileName}`);
-	lines.push(`+++ ${patch.newFileName}`);
+	lines.push(`--- ${patch.oldFileName}`, `+++ ${patch.newFileName}`);
 
 	for (const hunk of patch.hunks) {
 		lines.push(

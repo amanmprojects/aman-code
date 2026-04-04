@@ -1,8 +1,4 @@
 import {useState, useCallback, useRef, useEffect} from 'react';
-import {createAgent} from '../agent/index.js';
-import type {Mode} from '../utils/permissions.js';
-import {getAllowedToolNames} from '../utils/permissions.js';
-import {allTools, type AgentToolName} from '../tools/index.js';
 import {
 	createAgentUIStream,
 	isToolUIPart,
@@ -10,12 +6,16 @@ import {
 	type ToolExecutionOptions,
 	type UIMessage,
 } from 'ai';
-import {formatUiPerfDuration, logUiPerf} from '../utils/uiPerf.js';
-import {getErrorMessage, classifyError} from '../utils/errorClassification.js';
+import {createAgent} from '../agent/index.js';
+import type {Mode} from '../utils/permissions.js';
+import {getAllowedToolNames} from '../utils/permissions.js';
+import {allTools, type AgentToolName} from '../tools/index.js';
+import {formatUiPerfDuration, logUiPerf} from '../utils/ui-perf.js';
+import {getErrorMessage, classifyError} from '../utils/error-classification.js';
 import {
 	createTranscriptStore,
 	type TranscriptStore,
-} from '../state/transcriptStore.js';
+} from '../state/transcript-store.js';
 import {
 	saveSession,
 	deriveTitle,
@@ -52,14 +52,14 @@ export type PendingInteraction =
 			allowMultiple: boolean;
 	  };
 
-let msgCounter = 0;
+let messageCounter = 0;
 /**
  * Generate a unique identifier for a message.
  *
  * @returns A string message id suitable for use as a unique message identifier (e.g. "msg-<timestamp>-<counter>").
  */
 function generateId() {
-	return `msg-${Date.now()}-${++msgCounter}`;
+	return `msg-${Date.now()}-${++messageCounter}`;
 }
 
 function normalizeMessages(
@@ -190,7 +190,7 @@ function updateToolPartInMessages(options: {
  */
 function extractPendingInteraction(
 	messages: UIMessage[],
-): PendingInteraction | null {
+): PendingInteraction | undefined {
 	for (
 		let messageIndex = messages.length - 1;
 		messageIndex >= 0;
@@ -281,13 +281,13 @@ function extractPendingInteraction(
 
 				const options = Array.isArray(input['options'])
 					? input['options']
-							.map((option): QuestionOption | null => {
+							.map((option): QuestionOption | undefined => {
 								if (
 									option == null ||
 									typeof option !== 'object' ||
 									Array.isArray(option)
 								) {
-									return null;
+									return undefined;
 								}
 
 								const candidate = option as Record<string, unknown>;
@@ -295,7 +295,7 @@ function extractPendingInteraction(
 									typeof candidate['id'] !== 'string' ||
 									typeof candidate['label'] !== 'string'
 								) {
-									return null;
+									return undefined;
 								}
 
 								return {
@@ -332,7 +332,7 @@ function extractPendingInteraction(
 		}
 	}
 
-	return null;
+	return undefined;
 }
 
 /**
@@ -348,24 +348,27 @@ function extractPendingInteraction(
  *  - `submitToolApproval(options)`: submit an approval response for a tool UI part and rerun the agent
  *  - `submitToolOutput(options)`: submit tool output for a tool UI part and rerun the agent
  */
-interface UseAgentOptions {
+type UseAgentOptions = {
 	initialMessages?: UIMessage[];
 	sessionId?: string;
-}
+};
 
 export function useAgent(mode: Mode, options?: UseAgentOptions) {
 	const [isLoading, setIsLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [pendingInteraction, setPendingInteraction] =
-		useState<PendingInteraction | null>(null);
+	const [error, setError] = useState<string | undefined>(undefined);
+	const [pendingInteraction, setPendingInteraction] = useState<
+		PendingInteraction | undefined
+	>(undefined);
 	const agentRef = useRef(createAgent());
 	const transcriptStoreRef = useRef<TranscriptStore>(createTranscriptStore());
 	const messagesRef = useRef<UIMessage[]>(options?.initialMessages ?? []);
 	const agentRunIdRef = useRef(0);
-	const agentAbortRef = useRef<AbortController | null>(null);
+	const agentAbortRef = useRef<AbortController | undefined>(undefined);
 	const sessionIdRef = useRef(options?.sessionId ?? generateSessionId());
 	const sessionCreatedAtRef = useRef(new Date().toISOString());
-	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+		undefined,
+	);
 	const modeRef = useRef(mode);
 
 	// Hydrate transcript store with initial messages on mount
@@ -384,7 +387,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 		() => () => {
 			if (saveTimerRef.current) {
 				clearTimeout(saveTimerRef.current);
-				saveTimerRef.current = null;
+				saveTimerRef.current = undefined;
 			}
 		},
 		[],
@@ -396,7 +399,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 		}
 
 		saveTimerRef.current = setTimeout(() => {
-			saveTimerRef.current = null;
+			saveTimerRef.current = undefined;
 			if (messages.length === 0) {
 				return;
 			}
@@ -411,7 +414,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 				messages,
 			};
 
-			void saveSession(session).catch(error => {
+			void saveSession(session).catch((error: unknown) => {
 				console.error('Failed to save session', {
 					error,
 					sessionId: session.id,
@@ -465,7 +468,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 				agentAbortRef.current === runAbortController &&
 				!runAbortController.signal.aborted;
 
-			setError(null);
+			setError(undefined);
 			setIsLoading(true);
 
 			const activeTools = [...getAllowedToolNames(runMode)] as AgentToolName[];
@@ -483,7 +486,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 
 			try {
 				let finalMessages = baseMessages;
-				let lastError: unknown = null;
+				let lastError: unknown;
 
 				while (retryCount <= MAX_RETRIES) {
 					if (!isCurrentRun()) {
@@ -504,7 +507,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 
 						for await (const assistantMessage of readUIMessageStream({
 							stream,
-							onError: streamError => {
+							onError(streamError) {
 								lastError = streamError;
 								streamSucceeded = false;
 								if (retryCount >= MAX_RETRIES && isCurrentRun()) {
@@ -543,8 +546,8 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 						if (streamSucceeded) {
 							break;
 						}
-					} catch (err: unknown) {
-						lastError = err;
+					} catch (error_: unknown) {
+						lastError = error_;
 					}
 
 					retryCount += 1;
@@ -568,6 +571,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 							if (retryCount >= MAX_RETRIES && isCurrentRun()) {
 								setError(getErrorMessage(lastError));
 							}
+
 							break;
 						}
 					}
@@ -582,9 +586,9 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 				}
 
 				setConversation(finalMessages);
-			} catch (err: unknown) {
+			} catch (error_: unknown) {
 				if (isCurrentRun()) {
-					setError(getErrorMessage(err));
+					setError(getErrorMessage(error_));
 				}
 			} finally {
 				logUiPerf('agent_run_finished', {
@@ -594,7 +598,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 				});
 
 				if (agentAbortRef.current === runAbortController) {
-					agentAbortRef.current = null;
+					agentAbortRef.current = undefined;
 					if (agentRunIdRef.current === runId) {
 						setIsLoading(false);
 					}
@@ -655,7 +659,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 						messages: messagesRef.current,
 						messageId: options.messageId,
 						toolCallId: options.toolCallId,
-						updater: part => {
+						updater(part) {
 							const {
 								errorText: _errorText,
 								approval: _approval,
@@ -677,7 +681,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 						messages: messagesRef.current,
 						messageId: options.messageId,
 						toolCallId: options.toolCallId,
-						updater: part => {
+						updater(part) {
 							const {
 								output: _output,
 								approval: _approval,
@@ -701,7 +705,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 					messages: messagesRef.current,
 					messageId: options.messageId,
 					toolCallId: options.toolCallId,
-					updater: part => {
+					updater(part) {
 						const {
 							output: _output,
 							approval: _approval,
@@ -728,7 +732,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 					messages: messagesRef.current,
 					messageId: options.messageId,
 					toolCallId: options.toolCallId,
-					updater: part => {
+					updater(part) {
 						const {
 							output: _output,
 							approval: _approval,
@@ -767,7 +771,7 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 				messages: messagesRef.current,
 				messageId: options.messageId,
 				toolCallId: options.toolCallId,
-				updater: part => {
+				updater(part) {
 					const {
 						errorText: _errorText,
 						approval: _approval,

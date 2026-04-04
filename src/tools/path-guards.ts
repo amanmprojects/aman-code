@@ -1,4 +1,4 @@
-const BLOCKED_DEVICE_PATHS = new Set([
+const blockedDevicePaths = new Set([
 	'/dev/null',
 	'/dev/zero',
 	'/dev/random',
@@ -18,7 +18,7 @@ const BLOCKED_DEVICE_PATHS = new Set([
 ]);
 
 export function isBlockedDevicePath(filePath: string): boolean {
-	if (BLOCKED_DEVICE_PATHS.has(filePath)) {
+	if (blockedDevicePaths.has(filePath)) {
 		return true;
 	}
 
@@ -34,6 +34,8 @@ export function isBlockedDevicePath(filePath: string): boolean {
 	return false;
 }
 
-export function isUNCPath(filePath: string): boolean {
+export function isUncPath(filePath: string): boolean {
 	return filePath.startsWith('\\\\') || filePath.startsWith('//');
 }
+
+export const isUNCPath = isUncPath;

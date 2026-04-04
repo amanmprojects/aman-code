@@ -1,9 +1,9 @@
-export const DEFAULT_HEAD_LIMIT = 250;
+export const defaultHeadLimit = 250;
 
 export function applyHeadLimit<T>(
 	items: T[],
 	limit: number | undefined,
-	offset: number = 0,
+	offset = 0,
 ): {items: T[]; appliedLimit: number | undefined; wasTruncated: boolean} {
 	if (limit === 0) {
 		return {
@@ -13,7 +13,7 @@ export function applyHeadLimit<T>(
 		};
 	}
 
-	const effectiveLimit = limit ?? DEFAULT_HEAD_LIMIT;
+	const effectiveLimit = limit ?? defaultHeadLimit;
 	const sliced = items.slice(offset, offset + effectiveLimit);
 	const wasTruncated = items.length - offset > effectiveLimit;
 	return {
@@ -25,11 +25,11 @@ export function applyHeadLimit<T>(
 
 export function getPreStatLimit(
 	limit: number | undefined,
-	offset: number = 0,
+	offset = 0,
 ): number | undefined {
 	if (limit === 0) {
 		return undefined;
 	}
 
-	return (limit ?? DEFAULT_HEAD_LIMIT) + offset;
+	return (limit ?? defaultHeadLimit) + offset;
 }

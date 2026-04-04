@@ -1,9 +1,9 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import {tool} from 'ai';
 import {z} from 'zod';
 import {execa, type ExecaError} from 'execa';
 import treeKill from 'tree-kill';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import {getExecuteCommandDescription, DEFAULT_TIMEOUT_MS} from './prompt.js';
 
 const DANGEROUS_PATTERNS = [
@@ -11,7 +11,7 @@ const DANGEROUS_PATTERNS = [
 	/rm\s+(-[a-zA-Z]*)?f[a-zA-Z]*r?\s+\/(?!\S)/,
 	/mkfs/,
 	/dd\s+if=/,
-	/:\(\)\{\s*:\|:&\s*\};/, // Fork bomb pattern
+	/:\(\){\s*:\|:&\s*};/, // Fork bomb pattern
 	/>\s*\/dev\/sd[a-z]/,
 	/chmod\s+(-R\s+)?777\s+\//,
 	/chown\s+(-R\s+)?.*\s+\//,
@@ -111,6 +111,7 @@ function formatDuration(ms: number): string {
 	if (minutes > 0) {
 		return `${minutes}m ${remainingSeconds}s`;
 	}
+
 	return `${seconds}s`;
 }
 
@@ -161,13 +162,13 @@ export const executeCommand = tool({
 				'If true, start the command in the background and return immediately.',
 			),
 	}),
-	execute: async ({
+	async execute({
 		command,
 		cwd,
 		timeoutMs = DEFAULT_TIMEOUT_MS,
 		maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
 		background = false,
-	}) => {
+	}) {
 		const resolvedCwd = cwd ? path.resolve(cwd) : process.cwd();
 		const classification = classifyCommand(command);
 
@@ -222,7 +223,7 @@ export const executeCommand = tool({
 					startedAt,
 					stdout: '',
 					stderr: '',
-					exitCode: null,
+					exitCode: undefined,
 				};
 			}
 
@@ -243,7 +244,6 @@ export const executeCommand = tool({
 			let stderrTruncated = false;
 			let timedOut = false;
 			let killedByTimeout = false;
-			let exitCode: number | null = null;
 
 			// Use execa with streaming for bounded output
 			const subprocess = execa(command, [], {
@@ -289,7 +289,7 @@ export const executeCommand = tool({
 				clearTimeout(timeoutId);
 			}
 
-			exitCode = result.exitCode ?? (result.timedOut ? SIGTERM : 1);
+			const exitCode = result.exitCode ?? (result.timedOut ? SIGTERM : 1);
 
 			// Prepend timeout message if timed out
 			if (result.timedOut || killedByTimeout) {

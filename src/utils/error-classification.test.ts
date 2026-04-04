@@ -1,5 +1,5 @@
 import test from 'ava';
-import {getErrorMessage, classifyError} from './errorClassification.js';
+import {getErrorMessage, classifyError} from './error-classification.js';
 
 test('getErrorMessage returns Error message for Error objects', t => {
 	const error = new Error('Test error message');
@@ -64,7 +64,7 @@ test('classifyError detects SyntaxException Unexpected token pattern', t => {
 
 test('classifyError returns null for non-JSON errors', t => {
 	const error = new Error('Some other error');
-	t.is(classifyError(error), null);
+	t.is(classifyError(error), undefined);
 });
 
 test('classifyError is case insensitive for patterns', t => {

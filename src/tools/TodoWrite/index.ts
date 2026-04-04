@@ -22,14 +22,14 @@ export const todoWrite = tool({
 		todos: z.array(todoItemSchema),
 		count: z.number(),
 	}),
-	execute: async ({todos}) => {
+	async execute({todos}) {
 		const todoList = new Map<string, z.infer<typeof todoItemSchema>>();
 		for (const todo of todos) {
 			todoList.set(todo.id, todo);
 		}
 
 		return {
-			todos: Array.from(todoList.values()),
+			todos: [...todoList.values()],
 			count: todoList.size,
 		};
 	},

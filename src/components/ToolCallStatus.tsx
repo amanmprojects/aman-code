@@ -6,9 +6,9 @@ import DiffView from './DiffView.js';
 
 type ToolPart = Extract<UIMessage['parts'][number], {toolCallId: string}>;
 
-interface ToolCallStatusProps {
-	toolPart: ToolPart;
-}
+type ToolCallStatusProps = {
+	readonly toolPart: ToolPart;
+};
 
 const TOOL_ICONS: Record<string, string> = {
 	readFile: '📄',
@@ -34,36 +34,61 @@ const TOOL_ICONS: Record<string, string> = {
  */
 function formatArgs(toolName: string, args: Record<string, any>): string {
 	switch (toolName) {
-		case 'readFile':
+		case 'readFile': {
 			return args['filePath'] ?? '';
-		case 'writeFile':
+		}
+
+		case 'writeFile': {
 			return args['filePath'] ?? '';
-		case 'editFile':
+		}
+
+		case 'editFile': {
 			return args['filePath'] ?? '';
-		case 'executeCommand':
+		}
+
+		case 'executeCommand': {
 			return args['command'] ?? '';
-		case 'grepSearch':
+		}
+
+		case 'grepSearch': {
 			return `"${args['pattern'] ?? ''}" in ${
 				args['path'] ?? args['searchPath'] ?? '.'
 			}`;
-		case 'globSearch':
+		}
+
+		case 'globSearch': {
 			return `"${args['pattern'] ?? ''}" in ${
 				args['path'] ?? args['searchPath'] ?? '.'
 			}`;
-		case 'listDir':
+		}
+
+		case 'listDir': {
 			return args['path'] ?? '.';
-		case 'toolSearch':
+		}
+
+		case 'toolSearch': {
 			return args['query'] ?? '';
-		case 'webSearch':
+		}
+
+		case 'webSearch': {
 			return args['query'] ?? '';
-		case 'askUserQuestion':
+		}
+
+		case 'askUserQuestion': {
 			return args['question'] ?? '';
-		case 'exitPlanMode':
+		}
+
+		case 'exitPlanMode': {
 			return args['planSummary'] ?? 'requesting plan handoff';
-		case 'todoWrite':
+		}
+
+		case 'todoWrite': {
 			return `${Array.isArray(args['todos']) ? args['todos'].length : 0} todos`;
-		default:
+		}
+
+		default: {
 			return JSON.stringify(args).slice(0, 80);
+		}
 	}
 }
 
@@ -97,7 +122,7 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 	}
 
 	switch (toolName) {
-		case 'askUserQuestion':
+		case 'askUserQuestion': {
 			return (
 				<Text dimColor>
 					Selected{' '}
@@ -106,12 +131,17 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 						: 'response'}
 				</Text>
 			);
-		case 'exitPlanMode':
+		}
+
+		case 'exitPlanMode': {
 			return <Text dimColor>{result.message ?? 'Plan exit approved.'}</Text>;
-		case 'todoWrite':
+		}
+
+		case 'todoWrite': {
 			if (!result.todos || !Array.isArray(result.todos)) {
 				return <Text dimColor>{result.count ?? 0} todo item(s) saved</Text>;
 			}
+
 			return (
 				<Box flexDirection="column">
 					<Text dimColor>{result.todos.length} todo item(s):</Text>
@@ -153,20 +183,26 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 					})}
 				</Box>
 			);
-		case 'editFile':
+		}
+
+		case 'editFile': {
 			if (result.diff) {
 				return <DiffView diff={result.diff} />;
 			}
 
 			return <Text dimColor>Edit applied to {result.filePath}</Text>;
-		case 'writeFile':
+		}
+
+		case 'writeFile': {
 			return (
 				<Text dimColor>
 					{result.action === 'created' ? 'Created' : 'Wrote'} {result.filePath}{' '}
 					({result.lines} lines)
 				</Text>
 			);
-		case 'readFile':
+		}
+
+		case 'readFile': {
 			if (result.content) {
 				const lines = String(result.content).split('\n');
 				const preview = lines.slice(0, 10).join('\n');
@@ -185,6 +221,8 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 			}
 
 			return null;
+		}
+
 		case 'executeCommand': {
 			const output = result.stdout || result.stderr || '';
 			const lines = String(output).split('\n');
@@ -203,7 +241,7 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 			);
 		}
 
-		case 'grepSearch':
+		case 'grepSearch': {
 			const grepMatches = Array.isArray(result.matches)
 				? result.matches.join('\n')
 				: '';
@@ -216,7 +254,9 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 					{grepMatches && <Text>{grepMatches.slice(0, 500)}</Text>}
 				</Box>
 			);
-		case 'globSearch':
+		}
+
+		case 'globSearch': {
 			return (
 				<Box flexDirection="column">
 					<Text dimColor>
@@ -233,7 +273,9 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 					)}
 				</Box>
 			);
-		case 'listDir':
+		}
+
+		case 'listDir': {
 			return (
 				<Box flexDirection="column">
 					<Text dimColor>
@@ -250,7 +292,9 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 					) : null}
 				</Box>
 			);
-		case 'toolSearch':
+		}
+
+		case 'toolSearch': {
 			return (
 				<Box flexDirection="column">
 					<Text dimColor>{result.count ?? 0} matching tool(s)</Text>
@@ -264,7 +308,9 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 					) : null}
 				</Box>
 			);
-		case 'webSearch':
+		}
+
+		case 'webSearch': {
 			return (
 				<Box flexDirection="column">
 					<Text dimColor>
@@ -281,8 +327,11 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 					) : null}
 				</Box>
 			);
-		default:
+		}
+
+		default: {
 			return <Text dimColor>{JSON.stringify(result).slice(0, 200)}</Text>;
+		}
 	}
 }
 
@@ -298,18 +347,16 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 	const toolName = getToolName(toolPart);
 	const icon = TOOL_ICONS[toolName] ?? '🔨';
 	const args = (toolPart.input ?? {}) as Record<string, any>;
-	const argsStr = formatArgs(toolName, args);
+	const argsString = formatArgs(toolName, args);
 	const isRunning =
 		toolPart.state === 'input-streaming' ||
 		toolPart.state === 'input-available';
 	const isAwaitingApproval = toolPart.state === 'approval-requested';
 	const isApprovalResponded =
-		toolPart.state === 'approval-responded' &&
-		toolPart.approval?.approved !== false;
+		toolPart.state === 'approval-responded' && toolPart.approval?.approved;
 	const isDenied =
 		toolPart.state === 'output-denied' ||
-		(toolPart.state === 'approval-responded' &&
-			toolPart.approval?.approved === false);
+		(toolPart.state === 'approval-responded' && !toolPart.approval?.approved);
 	const isDone = toolPart.state === 'output-available';
 	const isError = toolPart.state === 'output-error';
 
@@ -333,7 +380,7 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 				)}
 				<Text>
 					{icon} <Text bold>{toolName}</Text>
-					{argsStr ? <Text dimColor> {argsStr}</Text> : null}
+					{argsString ? <Text dimColor> {argsString}</Text> : null}
 				</Text>
 			</Box>
 			{isAwaitingApproval && (
@@ -373,19 +420,19 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 	);
 }
 
-export default memo(ToolCallStatus, (prevProps, nextProps) => {
-	const prevPart = prevProps.toolPart;
+export default memo(ToolCallStatus, (previousProps, nextProps) => {
+	const previousPart = previousProps.toolPart;
 	const nextPart = nextProps.toolPart;
 
 	return (
-		prevPart === nextPart ||
-		(prevPart.toolCallId === nextPart.toolCallId &&
-			prevPart.type === nextPart.type &&
-			getToolName(prevPart) === getToolName(nextPart) &&
-			prevPart.state === nextPart.state &&
-			prevPart.errorText === nextPart.errorText &&
-			prevPart.output === nextPart.output &&
-			prevPart.approval === nextPart.approval &&
-			getToolArgSummary(prevPart) === getToolArgSummary(nextPart))
+		previousPart === nextPart ||
+		(previousPart.toolCallId === nextPart.toolCallId &&
+			previousPart.type === nextPart.type &&
+			getToolName(previousPart) === getToolName(nextPart) &&
+			previousPart.state === nextPart.state &&
+			previousPart.errorText === nextPart.errorText &&
+			previousPart.output === nextPart.output &&
+			previousPart.approval === nextPart.approval &&
+			getToolArgSummary(previousPart) === getToolArgSummary(nextPart))
 	);
 });

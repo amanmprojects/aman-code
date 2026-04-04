@@ -3,8 +3,7 @@ import {codePrompt} from '../prompts/code.js';
 import {planPrompt} from '../prompts/plan.js';
 import {allTools, type AgentToolName} from '../tools/index.js';
 import type {Mode} from '../utils/permissions.js';
-import 'dotenv/config';
-import {modelList} from './modelList.js';
+import {modelList} from './model-list.js';
 
 type AgentCallOptions = {
 	activeTools?: AgentToolName[];

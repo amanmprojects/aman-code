@@ -1,4 +1,4 @@
-export const GLOB_SEARCH_TOOL_NAME = 'globSearch';
+export const globSearchToolName = 'globSearch';
 
 /**
  * Renders the globSearch tool description with detailed usage instructions.

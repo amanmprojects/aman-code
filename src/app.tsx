@@ -1,22 +1,21 @@
 import React, {useState, useCallback, useEffect} from 'react';
 import {Box, useInput} from 'ink';
-import AppFooter from './components/AppFooter.js';
-import AppHeader from './components/AppHeader.js';
-import ComposerPanel from './components/ComposerPanel.js';
-import ConversationPanel from './components/ConversationPanel.js';
+import type {UIMessage} from 'ai';
+import AppFooter from './components/app-footer.js';
+import AppHeader from './components/app-header.js';
+import ComposerPanel from './components/composer-panel.js';
+import ConversationPanel from './components/conversation-panel.js';
 import {useAgent} from './hooks/useAgent.js';
 import type {Mode} from './utils/permissions.js';
-import {formatUiPerfDuration, logUiPerf} from './utils/uiPerf.js';
+import {formatUiPerfDuration, logUiPerf} from './utils/ui-perf.js';
 
-import type {UIMessage} from 'ai';
+type AppProps = {
+	readonly mode?: Mode;
+	readonly sessionId?: string;
+	readonly initialMessages?: UIMessage[];
+};
 
-interface AppProps {
-	mode?: Mode;
-	sessionId?: string;
-	initialMessages?: UIMessage[];
-}
-
-const MODE_ORDER: Mode[] = ['plan', 'code', 'yolo'];
+const modeOrder: Mode[] = ['plan', 'code', 'yolo'];
 
 /**
  * Root Ink React component that manages the chat UI, agent integration, mode switching, and interactive tool prompts.
@@ -27,9 +26,15 @@ const MODE_ORDER: Mode[] = ['plan', 'code', 'yolo'];
  * @param mode - The initial operation mode (`'plan' | 'code' | 'yolo'`). Defaults to `'code'`.
  * @returns The rendered CLI application UI.
  */
-export default function App({mode: initialMode = 'code', sessionId, initialMessages}: AppProps) {
+export default function App({
+	mode: initialMode = 'code',
+	sessionId,
+	initialMessages,
+}: AppProps) {
 	const [mode, setMode] = useState<Mode>(initialMode);
-	const [interactionError, setInteractionError] = useState<string | null>(null);
+	const [interactionError, setInteractionError] = useState<string | undefined>(
+		undefined,
+	);
 	const {
 		transcriptStore,
 		isLoading,
@@ -40,10 +45,10 @@ export default function App({mode: initialMode = 'code', sessionId, initialMessa
 		submitToolOutput,
 	} = useAgent(mode, {sessionId, initialMessages});
 
-	const hasPendingInteraction = pendingInteraction != null;
+	const hasPendingInteraction = pendingInteraction !== undefined;
 
 	useEffect(() => {
-		setInteractionError(null);
+		setInteractionError(undefined);
 	}, [pendingInteraction]);
 
 	useInput((keyInput, key) => {
@@ -59,16 +64,16 @@ export default function App({mode: initialMode = 'code', sessionId, initialMessa
 		}
 
 		setMode(previousMode => {
-			const currentIndex = MODE_ORDER.indexOf(previousMode);
+			const currentIndex = modeOrder.indexOf(previousMode);
 			if (currentIndex === -1) {
 				return previousMode;
 			}
 
 			const nextIndex = isShiftTab
-				? (currentIndex - 1 + MODE_ORDER.length) % MODE_ORDER.length
-				: (currentIndex + 1) % MODE_ORDER.length;
+				? (currentIndex - 1 + modeOrder.length) % modeOrder.length
+				: (currentIndex + 1) % modeOrder.length;
 
-			const nextMode = MODE_ORDER[nextIndex];
+			const nextMode = modeOrder[nextIndex];
 			if (nextMode && nextMode !== previousMode) {
 				logUiPerf('mode_switch', {
 					from: previousMode,
@@ -102,7 +107,7 @@ export default function App({mode: initialMode = 'code', sessionId, initialMessa
 				return;
 			}
 
-			setInteractionError(null);
+			setInteractionError(undefined);
 
 			const nextMode =
 				approved && pendingInteraction.toolName === 'exitPlanMode'
@@ -121,7 +126,7 @@ export default function App({mode: initialMode = 'code', sessionId, initialMessa
 				if (approved && pendingInteraction.toolName === 'exitPlanMode') {
 					setMode(nextMode);
 				}
-			} catch (error) {
+			} catch (error: unknown) {
 				console.error('Failed to submit tool approval', error);
 				setInteractionError('Failed to submit approval. Please try again.');
 			}
@@ -135,7 +140,7 @@ export default function App({mode: initialMode = 'code', sessionId, initialMessa
 				return;
 			}
 
-			setInteractionError(null);
+			setInteractionError(undefined);
 
 			const selectedLabels = pendingInteraction.options
 				.filter(option => selectedOptionIds.includes(option.id))
@@ -150,7 +155,7 @@ export default function App({mode: initialMode = 'code', sessionId, initialMessa
 						selectedLabels,
 					},
 				});
-			} catch (error) {
+			} catch (error: unknown) {
 				console.error('Failed to submit tool output', error);
 				setInteractionError('Failed to submit response. Please try again.');
 			}

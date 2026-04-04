@@ -1,3 +1,6 @@
+import {tool, type Tool, type ToolExecutionOptions} from 'ai';
+import {z} from 'zod';
+import type {Mode} from '../utils/permissions.js';
 import {readFile} from './ReadFile/index.js';
 import {writeFile} from './WriteFile/index.js';
 import {editFile} from './EditFile/index.js';
@@ -10,26 +13,8 @@ import {webSearch} from './WebSearch/index.js';
 import {askUserQuestion} from './AskUserQuestion/index.js';
 import {exitPlanMode} from './ExitPlanMode/index.js';
 import {todoWrite} from './TodoWrite/index.js';
-import {tool, type Tool, type ToolExecutionOptions} from 'ai';
-import {z} from 'zod';
-import type {Mode} from '../utils/permissions.js';
 
-export {
-	readFile,
-	writeFile,
-	editFile,
-	executeCommand,
-	grepSearch,
-	globSearch,
-	listDir,
-	toolSearch,
-	webSearch,
-	askUserQuestion,
-	exitPlanMode,
-	todoWrite,
-};
-
-type AgentTool = Tool<any, any>;
+type AgentTool = Tool;
 
 type AgentToolSet = {
 	readFile: AgentTool;
@@ -62,7 +47,7 @@ const executeCommandWithModeSafety: AgentTool = tool({
 		maxOutputChars: z.number().int().positive().max(200_000).optional(),
 		background: z.boolean().optional(),
 	}),
-	execute: async (
+	async execute(
 		args: {
 			command: string;
 			cwd?: string;
@@ -71,7 +56,7 @@ const executeCommandWithModeSafety: AgentTool = tool({
 			background?: boolean;
 		},
 		toolOptions: ToolExecutionOptions,
-	) => {
+	) {
 		const context = toolOptions.experimental_context as
 			| {mode?: Mode}
 			| undefined;
@@ -88,14 +73,14 @@ const executeCommandWithModeSafety: AgentTool = tool({
 			};
 		}
 
-		if (executeCommand.execute == null) {
+		if (executeCommand.execute === null) {
 			return {
 				error:
 					'Command execution tool is unavailable in the current installation.',
 			};
 		}
 
-		return executeCommand.execute(args, toolOptions);
+		return executeCommand.execute!(args, toolOptions);
 	},
 });
 
@@ -115,3 +100,17 @@ export const allTools: AgentToolSet = {
 };
 
 export type AgentToolName = keyof AgentToolSet;
+
+export {readFile} from './ReadFile/index.js';
+export {editFile} from './EditFile/index.js';
+export {writeFile} from './WriteFile/index.js';
+export {grepSearch} from './GrepSearch/index.js';
+export {executeCommand} from './ExecuteCommand/index.js';
+export {listDir} from './ListDir/index.js';
+export {globSearch} from './GlobSearch/index.js';
+
+export {toolSearch} from './ToolSearch/index.js';
+export {askUserQuestion} from './AskUserQuestion/index.js';
+export {webSearch} from './WebSearch/index.js';
+export {todoWrite} from './TodoWrite/index.js';
+export {exitPlanMode} from './ExitPlanMode/index.js';

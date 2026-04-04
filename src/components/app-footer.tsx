@@ -1,12 +1,12 @@
 import React, {memo} from 'react';
 import {Box, Spacer, Text} from 'ink';
-import ModeIndicator from './ModeIndicator.js';
 import type {Mode} from '../utils/permissions.js';
+import ModeIndicator from './mode-indicator.js';
 
-interface AppFooterProps {
-	mode: Mode;
-	hasPendingInteraction: boolean;
-}
+type AppFooterProps = {
+	readonly mode: Mode;
+	readonly hasPendingInteraction: boolean;
+};
 
 function AppFooter({mode, hasPendingInteraction}: AppFooterProps) {
 	return (

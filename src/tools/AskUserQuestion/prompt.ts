@@ -1,4 +1,4 @@
-export const ASK_USER_QUESTION_TOOL_NAME = 'askUserQuestion';
+export const askUserQuestionToolName = 'askUserQuestion';
 
 /**
  * Renders the askUserQuestion tool description with detailed usage instructions.

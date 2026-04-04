@@ -12,7 +12,9 @@ export const exitPlanMode = tool({
 		targetMode: z
 			.enum(['code', 'yolo'])
 			.optional()
-			.describe('The mode to switch to if the user approves. Defaults to code.'),
+			.describe(
+				'The mode to switch to if the user approves. Defaults to code.',
+			),
 	}),
 	outputSchema: z.object({
 		approved: z.literal(true),
@@ -20,7 +22,7 @@ export const exitPlanMode = tool({
 		message: z.string(),
 	}),
 	needsApproval: true,
-	execute: async ({planSummary, targetMode = 'code'}) => {
+	async execute({planSummary, targetMode = 'code'}) {
 		return {
 			approved: true,
 			targetMode,

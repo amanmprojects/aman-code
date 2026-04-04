@@ -23,7 +23,9 @@ export const askUserQuestion = tool({
 		allowMultiple: z
 			.boolean()
 			.optional()
-			.describe('Whether the user may choose more than one option. Defaults to false.'),
+			.describe(
+				'Whether the user may choose more than one option. Defaults to false.',
+			),
 	}),
 	outputSchema: z.object({
 		selectedOptionIds: z.array(z.string()),

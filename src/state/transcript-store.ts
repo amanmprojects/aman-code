@@ -1,24 +1,24 @@
 import {useCallback, useSyncExternalStore} from 'react';
 import type {UIMessage} from 'ai';
 
-export interface TranscriptMeasurement {
+export type TranscriptMeasurement = {
 	width: number;
 	height: number;
 	signature: string;
-}
+};
 
-interface TranscriptSnapshot {
+type TranscriptSnapshot = {
 	orderedIds: string[];
 	messagesById: Record<string, UIMessage>;
 	measuredHeights: Record<string, TranscriptMeasurement>;
-}
+};
 
-export interface TranscriptStore {
+export type TranscriptStore = {
 	subscribe: (listener: () => void) => () => void;
 	getSnapshot: () => TranscriptSnapshot;
 	getMessages: () => UIMessage[];
 	getMessageIds: () => string[];
-	getMessageById: (id: string) => UIMessage | null;
+	getMessageById: (id: string) => UIMessage | undefined;
 	setMessages: (messages: UIMessage[]) => void;
 	setMeasuredHeight: (
 		id: string,
@@ -26,7 +26,7 @@ export interface TranscriptStore {
 		height: number,
 		signature: string,
 	) => void;
-}
+};
 
 export function createTranscriptStore(): TranscriptStore {
 	let snapshot: TranscriptSnapshot = {
@@ -70,7 +70,7 @@ export function createTranscriptStore(): TranscriptStore {
 
 			cachedMessages = snapshot.orderedIds
 				.map(id => snapshot.messagesById[id])
-				.filter((message): message is UIMessage => message != null);
+				.filter((message): message is UIMessage => message !== null);
 			cachedOrderedIdsRef = snapshot.orderedIds;
 			cachedMessagesByIdRef = snapshot.messagesById;
 			return cachedMessages;
@@ -79,7 +79,7 @@ export function createTranscriptStore(): TranscriptStore {
 			return snapshot.orderedIds;
 		},
 		getMessageById(id: string) {
-			return snapshot.messagesById[id] ?? null;
+			return snapshot.messagesById[id] ?? undefined;
 		},
 		setMessages(messages: UIMessage[]) {
 			const nextOrderedIds = messages.map(message => message.id);

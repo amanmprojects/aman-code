@@ -1,4 +1,3 @@
-import test from 'ava';
 import {
 	mkdtemp,
 	readFile,
@@ -9,6 +8,7 @@ import {
 } from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import test from 'ava';
 import type {UIMessage} from 'ai';
 import {
 	deleteSession,
@@ -49,7 +49,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
 	};
 }
 
-async function withTempSessionsDir(
+async function withTemporarySessionsDir(
 	run: (sessionsDir: string) => Promise<void>,
 ): Promise<void> {
 	const sessionsDir = await mkdtemp(join(tmpdir(), 'aman-code-sessions-'));
@@ -60,7 +60,7 @@ async function withTempSessionsDir(
 		await run(sessionsDir);
 	} finally {
 		if (previous === undefined) {
-			delete process.env['AMAN_CODE_SESSIONS_DIR'];
+			Reflect.deleteProperty(process.env, 'AMAN_CODE_SESSIONS_DIR');
 		} else {
 			process.env['AMAN_CODE_SESSIONS_DIR'] = previous;
 		}
@@ -73,8 +73,8 @@ test('generateSessionId returns unique ids', t => {
 	const first = generateSessionId();
 	const second = generateSessionId();
 
-	t.regex(first, /^sess-\d+-\d+-[a-f0-9]{8}$/);
-	t.regex(second, /^sess-\d+-\d+-[a-f0-9]{8}$/);
+	t.regex(first, /^sess-\d+-\d+-[a-f\d]{8}$/);
+	t.regex(second, /^sess-\d+-\d+-[a-f\d]{8}$/);
 	t.not(first, second);
 });
 
@@ -99,7 +99,7 @@ test('deriveTitle returns fallback for empty messages', t => {
 });
 
 test.serial('saveSession persists expected data and updates index', async t => {
-	await withTempSessionsDir(async sessionsDir => {
+	await withTemporarySessionsDir(async sessionsDir => {
 		const session = createSession({
 			messages: [createMessage('u1', 'user', 'Persist this session')],
 			createdAt: '2024-01-01T00:00:00.000Z',
@@ -110,12 +110,12 @@ test.serial('saveSession persists expected data and updates index', async t => {
 
 		const rawSession = await readFile(
 			join(sessionsDir, `${session.id}.json`),
-			'utf-8',
+			'utf8',
 		);
 		const persistedSession = JSON.parse(rawSession) as Session;
 		t.deepEqual(persistedSession, session);
 
-		const rawIndex = await readFile(join(sessionsDir, 'index.json'), 'utf-8');
+		const rawIndex = await readFile(join(sessionsDir, 'index.json'), 'utf8');
 		const persistedIndex = JSON.parse(rawIndex) as Session[];
 		t.is(persistedIndex.length, 1);
 		t.is(persistedIndex[0]?.id, session.id);
@@ -126,7 +126,7 @@ test.serial('saveSession persists expected data and updates index', async t => {
 test.serial(
 	'loadSession returns stored session and handles missing/corrupt files',
 	async t => {
-		await withTempSessionsDir(async sessionsDir => {
+		await withTemporarySessionsDir(async sessionsDir => {
 			const session = createSession({
 				messages: [createMessage('u1', 'user', 'Reload me')],
 			});
@@ -135,20 +135,20 @@ test.serial(
 			const loaded = await loadSession(session.id);
 			t.deepEqual(loaded, session);
 
-			t.is(await loadSession(generateSessionId()), null);
+			t.is(await loadSession(generateSessionId()), undefined);
 
 			await writeFile(
 				join(sessionsDir, `${session.id}.json`),
 				'{bad json',
-				'utf-8',
+				'utf8',
 			);
-			t.is(await loadSession(session.id), null);
+			t.is(await loadSession(session.id), undefined);
 		});
 	},
 );
 
 test.serial('loadSession rejects malformed message shapes', async t => {
-	await withTempSessionsDir(async sessionsDir => {
+	await withTemporarySessionsDir(async sessionsDir => {
 		const id = generateSessionId();
 		const malformed = {
 			id,
@@ -169,17 +169,17 @@ test.serial('loadSession rejects malformed message shapes', async t => {
 		await writeFile(
 			join(sessionsDir, `${id}.json`),
 			JSON.stringify(malformed),
-			'utf-8',
+			'utf8',
 		);
 
-		t.is(await loadSession(id), null);
+		t.is(await loadSession(id), undefined);
 	});
 });
 
 test.serial(
 	'listSessions reflects saved and deleted sessions and rebuilds index',
 	async t => {
-		await withTempSessionsDir(async sessionsDir => {
+		await withTemporarySessionsDir(async sessionsDir => {
 			const first = createSession({
 				messages: [createMessage('u1', 'user', 'First session')],
 				updatedAt: '2024-01-01T00:00:00.000Z',
@@ -216,7 +216,7 @@ test.serial(
 );
 
 test.serial('deleteSession removes file and updates index', async t => {
-	await withTempSessionsDir(async sessionsDir => {
+	await withTemporarySessionsDir(async sessionsDir => {
 		const session = createSession();
 		await saveSession(session);
 
@@ -233,7 +233,7 @@ test.serial('deleteSession removes file and updates index', async t => {
 test.serial(
 	'concurrent saveSession calls preserve all index updates',
 	async t => {
-		await withTempSessionsDir(async () => {
+		await withTemporarySessionsDir(async () => {
 			const first = createSession({
 				messages: [createMessage('u1', 'user', 'Concurrent one')],
 			});
@@ -255,7 +255,7 @@ test.serial(
 test.serial(
 	'invalid session ids are rejected for save/delete and ignored for load',
 	async t => {
-		await withTempSessionsDir(async () => {
+		await withTemporarySessionsDir(async () => {
 			const invalidId = '../escape';
 			const session = createSession({id: invalidId});
 
@@ -269,7 +269,7 @@ test.serial(
 				message: /Invalid session id/u,
 			});
 
-			t.is(await loadSession(invalidId), null);
+			t.is(await loadSession(invalidId), undefined);
 		});
 	},
 );

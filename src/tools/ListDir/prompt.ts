@@ -1,4 +1,4 @@
-export const LIST_DIR_TOOL_NAME = 'listDir';
+export const listDirToolName = 'listDir';
 
 /**
  * Renders the listDir tool description with detailed usage instructions.

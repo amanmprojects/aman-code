@@ -1,13 +1,13 @@
 import React, {memo} from 'react';
 import {Box, Text} from 'ink';
+import {isToolUIPart, type UIMessage} from 'ai';
 import Markdown from './Markdown.js';
 import ToolCallStatus from './ToolCallStatus.js';
-import {isToolUIPart, type UIMessage} from 'ai';
 
-interface AssistantMessageProps {
-	message: UIMessage;
-	tailLines?: number;
-}
+type AssistantMessageProps = {
+	readonly message: UIMessage;
+	readonly tailLines?: number;
+};
 
 function trimToTailLines(text: string, tailLines: number) {
 	if (tailLines <= 0) {

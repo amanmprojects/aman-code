@@ -1,6 +1,6 @@
 import test from 'ava';
 import type {UIMessage} from 'ai';
-import {createTranscriptStore} from './transcriptStore.js';
+import {createTranscriptStore} from './transcript-store.js';
 
 function createMessage(
 	id: string,

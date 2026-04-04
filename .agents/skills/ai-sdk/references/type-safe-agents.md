@@ -22,17 +22,17 @@ lib/
 
 ```ts
 // lib/tools/weather-tool.ts
-import { tool } from 'ai';
-import { z } from 'zod';
+import {tool} from 'ai';
+import {z} from 'zod';
 
 export const weatherTool = tool({
-  description: 'Get current weather for a location',
-  inputSchema: z.object({
-    location: z.string().describe('City name'),
-  }),
-  execute: async ({ location }) => {
-    return { temperature: 72, condition: 'sunny', location };
-  },
+	description: 'Get current weather for a location',
+	inputSchema: z.object({
+		location: z.string().describe('City name'),
+	}),
+	execute: async ({location}) => {
+		return {temperature: 72, condition: 'sunny', location};
+	},
 });
 ```
 
@@ -40,17 +40,17 @@ export const weatherTool = tool({
 
 ```ts
 // lib/agents/my-agent.ts
-import { ToolLoopAgent, InferAgentUIMessage } from 'ai';
-import { weatherTool } from '../tools/weather-tool';
-import { calculatorTool } from '../tools/calculator-tool';
+import {ToolLoopAgent, InferAgentUIMessage} from 'ai';
+import {weatherTool} from '../tools/weather-tool';
+import {calculatorTool} from '../tools/calculator-tool';
 
 export const myAgent = new ToolLoopAgent({
-  model: 'anthropic/claude-sonnet-4',
-  instructions: 'You are a helpful assistant.',
-  tools: {
-    weather: weatherTool,
-    calculator: calculatorTool,
-  },
+	model: 'anthropic/claude-sonnet-4',
+	instructions: 'You are a helpful assistant.',
+	tools: {
+		weather: weatherTool,
+		calculator: calculatorTool,
+	},
 });
 
 // Infer the UIMessage type from the agent
@@ -61,11 +61,11 @@ export type MyAgentUIMessage = InferAgentUIMessage<typeof myAgent>;
 
 ```ts
 // lib/agents/my-agent.ts
-import { z } from 'zod';
+import {z} from 'zod';
 
 const metadataSchema = z.object({
-  createdAt: z.number(),
-  model: z.string().optional(),
+	createdAt: z.number(),
+	model: z.string().optional(),
 });
 
 type MyMetadata = z.infer<typeof metadataSchema>;
@@ -77,19 +77,19 @@ export type MyAgentUIMessage = InferAgentUIMessage<typeof myAgent, MyMetadata>;
 
 ```tsx
 // app/chat.tsx
-import { useChat } from '@ai-sdk/react';
-import type { MyAgentUIMessage } from '@/lib/agents/my-agent';
+import {useChat} from '@ai-sdk/react';
+import type {MyAgentUIMessage} from '@/lib/agents/my-agent';
 
 export function Chat() {
-  const { messages } = useChat<MyAgentUIMessage>();
+	const {messages} = useChat<MyAgentUIMessage>();
 
-  return (
-    <div>
-      {messages.map(message => (
-        <Message key={message.id} message={message} />
-      ))}
-    </div>
-  );
+	return (
+		<div>
+			{messages.map(message => (
+				<Message key={message.id} message={message} />
+			))}
+		</div>
+	);
 }
 ```
 
@@ -98,35 +98,35 @@ export function Chat() {
 Tool parts are typed as `tool-{toolName}` based on your agent's tools:
 
 ```tsx
-function Message({ message }: { message: MyAgentUIMessage }) {
-  return (
-    <div>
-      {message.parts.map((part, i) => {
-        switch (part.type) {
-          case 'text':
-            return <p key={i}>{part.text}</p>;
+function Message({message}: {message: MyAgentUIMessage}) {
+	return (
+		<div>
+			{message.parts.map((part, i) => {
+				switch (part.type) {
+					case 'text':
+						return <p key={i}>{part.text}</p>;
 
-          case 'tool-weather':
-            // part.input and part.output are fully typed
-            if (part.state === 'output-available') {
-              return (
-                <div key={i}>
-                  Weather in {part.input.location}: {part.output.temperature}F
-                </div>
-              );
-            }
-            return <div key={i}>Loading weather...</div>;
+					case 'tool-weather':
+						// part.input and part.output are fully typed
+						if (part.state === 'output-available') {
+							return (
+								<div key={i}>
+									Weather in {part.input.location}: {part.output.temperature}F
+								</div>
+							);
+						}
+						return <div key={i}>Loading weather...</div>;
 
-          case 'tool-calculator':
-            // TypeScript knows this is the calculator tool
-            return <div key={i}>Calculating...</div>;
+					case 'tool-calculator':
+						// TypeScript knows this is the calculator tool
+						return <div key={i}>Calculating...</div>;
 
-          default:
-            return null;
-        }
-      })}
-    </div>
-  );
+					default:
+						return null;
+				}
+			})}
+		</div>
+	);
 }
 ```
 
@@ -138,17 +138,17 @@ When rendering many tools, you may want to split each tool into its own componen
 
 ```ts
 // lib/tools/weather-tool.ts
-import { tool, UIToolInvocation } from 'ai';
-import { z } from 'zod';
+import {tool, UIToolInvocation} from 'ai';
+import {z} from 'zod';
 
 export const weatherTool = tool({
-  description: 'Get current weather for a location',
-  inputSchema: z.object({
-    location: z.string().describe('City name'),
-  }),
-  execute: async ({ location }) => {
-    return { temperature: 72, condition: 'sunny', location };
-  },
+	description: 'Get current weather for a location',
+	inputSchema: z.object({
+		location: z.string().describe('City name'),
+	}),
+	execute: async ({location}) => {
+		return {temperature: 72, condition: 'sunny', location};
+	},
 });
 
 // Export the invocation type for use in UI components
@@ -159,45 +159,45 @@ Then import only the type in your component:
 
 ```tsx
 // components/weather-tool.tsx
-import type { WeatherToolInvocation } from '@/lib/tools/weather-tool';
+import type {WeatherToolInvocation} from '@/lib/tools/weather-tool';
 
 export function WeatherToolComponent({
-  invocation,
+	invocation,
 }: {
-  invocation: WeatherToolInvocation;
+	invocation: WeatherToolInvocation;
 }) {
-  // invocation.input and invocation.output are fully typed
-  if (invocation.state === 'output-available') {
-    return (
-      <div>
-        Weather in {invocation.input.location}: {invocation.output.temperature}F
-      </div>
-    );
-  }
-  return <div>Loading weather for {invocation.input?.location}...</div>;
+	// invocation.input and invocation.output are fully typed
+	if (invocation.state === 'output-available') {
+		return (
+			<div>
+				Weather in {invocation.input.location}: {invocation.output.temperature}F
+			</div>
+		);
+	}
+	return <div>Loading weather for {invocation.input?.location}...</div>;
 }
 ```
 
 Use the component in your message renderer:
 
 ```tsx
-function Message({ message }: { message: MyAgentUIMessage }) {
-  return (
-    <div>
-      {message.parts.map((part, i) => {
-        switch (part.type) {
-          case 'text':
-            return <p key={i}>{part.text}</p>;
-          case 'tool-weather':
-            return <WeatherToolComponent key={i} invocation={part} />;
-          case 'tool-calculator':
-            return <CalculatorToolComponent key={i} invocation={part} />;
-          default:
-            return null;
-        }
-      })}
-    </div>
-  );
+function Message({message}: {message: MyAgentUIMessage}) {
+	return (
+		<div>
+			{message.parts.map((part, i) => {
+				switch (part.type) {
+					case 'text':
+						return <p key={i}>{part.text}</p>;
+					case 'tool-weather':
+						return <WeatherToolComponent key={i} invocation={part} />;
+					case 'tool-calculator':
+						return <CalculatorToolComponent key={i} invocation={part} />;
+					default:
+						return null;
+				}
+			})}
+		</div>
+	);
 }
 ```
 

@@ -1,10 +1,10 @@
 import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 
-interface Part {
+type Part = {
 	type: string;
 	text: string;
-}
+};
 
 /**
  * Render a message row showing a green prompt and the message's concatenated text parts.
@@ -12,17 +12,17 @@ interface Part {
  * @param msg - Message object expected to have an `id` (used as the component key) and `parts` (array of `{ type: string; text: string }`) — only parts with `type === 'text'` are joined and displayed.
  * @returns A React element rendering the message row with a green prompt and the message text.
  */
-function UserMessage({msg}: {msg: any}) {
+function UserMessage({msg}: {readonly msg: any}) {
 	return (
 		<Box
 			key={msg.id}
 			flexDirection="row"
 			borderStyle="round"
-			borderColor='grey'
+			borderColor="grey"
 			borderLeft={false}
 			borderRight={false}
 		>
-			<Text color="green" bold>
+			<Text bold color="green">
 				{' ❯ '}
 			</Text>
 			<Text>

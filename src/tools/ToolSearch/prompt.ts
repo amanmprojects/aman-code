@@ -1,4 +1,4 @@
-export const TOOL_SEARCH_TOOL_NAME = 'toolSearch';
+export const toolSearchToolName = 'toolSearch';
 
 /**
  * Renders the toolSearch tool description with detailed usage instructions.

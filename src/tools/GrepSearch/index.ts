@@ -1,10 +1,10 @@
-import {tool} from 'ai';
-import {z} from 'zod';
 import {execFile} from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
-import {applyHeadLimit, getPreStatLimit} from '../../utils/headLimit.js';
+import {z} from 'zod';
+import {tool} from 'ai';
+import {isBlockedDevicePath, isUNCPath} from '../path-guards.js';
+import {applyHeadLimit, getPreStatLimit} from '../../utils/head-limit.js';
 import {getGrepSearchDescription} from './prompt.js';
 
 const VCS_DIRECTORIES_TO_EXCLUDE = [
@@ -33,7 +33,7 @@ type RipgrepOutputRecord = {
 	data?: {
 		path?: RipgrepTextField;
 		lines?: RipgrepTextField;
-		line_number?: number | null;
+		line_number?: number | undefined;
 		submatches?: unknown[];
 	};
 };
@@ -41,7 +41,7 @@ type RipgrepOutputRecord = {
 type ParsedRipgrepRecord = {
 	type: 'match' | 'context';
 	filePath: string;
-	lineNumber: number | null;
+	lineNumber: number | undefined;
 	text: string;
 	submatchCount: number;
 };
@@ -75,7 +75,7 @@ function formatLimitInfo(
 	return parts.join(', ');
 }
 
-function execFileAsync(
+async function execFileAsync(
 	command: string,
 	args: string[],
 	options: {cwd?: string; timeout?: number; maxBuffer?: number},
@@ -143,7 +143,7 @@ function parseRipgrepRecords(stdout: string): ParsedRipgrepRecord[] {
 			lineNumber:
 				typeof message.data?.line_number === 'number'
 					? message.data.line_number
-					: null,
+					: undefined,
 			text: decodeRipgrepText(message.data?.lines),
 			submatchCount: Array.isArray(message.data?.submatches)
 				? message.data.submatches.length
@@ -283,7 +283,7 @@ export const grepSearch = tool({
 				'Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false.',
 			),
 	}),
-	execute: async ({
+	async execute({
 		pattern,
 		path: inputPath,
 		searchPath,
@@ -300,7 +300,7 @@ export const grepSearch = tool({
 		headLimit,
 		offset = 0,
 		multiline,
-	}) => {
+	}) {
 		try {
 			const targetPath = inputPath ?? searchPath;
 			const resolved = targetPath ? path.resolve(targetPath) : process.cwd();
@@ -450,8 +450,7 @@ export const grepSearch = tool({
 					);
 				}
 
-				const countLines = Array.from(
-					countsByFile,
+				const countLines = [...countsByFile].map(
 					([filePath, totalMatchesForFile]) =>
 						`${toRelativePath(filePath)}:${totalMatchesForFile}`,
 				);
@@ -460,7 +459,7 @@ export const grepSearch = tool({
 					appliedLimit,
 					wasTruncated,
 				} = applyHeadLimit(countLines, headLimit, offset);
-				const totalMatches = Array.from(countsByFile.values()).reduce(
+				const totalMatches = [...countsByFile.values()].reduce(
 					(sum, count) => sum + count,
 					0,
 				);
@@ -488,34 +487,39 @@ export const grepSearch = tool({
 			const lines = stdout.trim().split('\n').filter(Boolean);
 			const preStatLimit = getPreStatLimit(headLimit, offset);
 			// Avoid stat'ing every rg result when the caller only needs a paginated page.
-			const candidateMatches =
+			const candidateMatches: string[] =
 				preStatLimit === undefined
 					? lines
 					: applyHeadLimit(lines, preStatLimit).items;
 			const pagination = applyHeadLimit(lines, headLimit, offset);
 			const stats = await Promise.allSettled(
-				candidateMatches.map(filePath => fs.stat(filePath)),
+				candidateMatches.map(async (filePath: string) => fs.stat(filePath)),
 			);
 			const sortedMatches = candidateMatches
-				.map((filePath, index) => {
+				.map((filePath: string, index: number) => {
 					const result = stats[index]!;
 					const mtimeMs =
 						result.status === 'fulfilled' ? result.value.mtimeMs ?? 0 : 0;
 					return {filePath, mtimeMs};
 				})
-				.sort((left, right) => {
-					if (process.env['NODE_ENV'] === 'test') {
-						return left.filePath.localeCompare(right.filePath);
-					}
+				.sort(
+					(
+						left: {filePath: string; mtimeMs: number},
+						right: {filePath: string; mtimeMs: number},
+					) => {
+						if (process.env['NODE_ENV'] === 'test') {
+							return left.filePath.localeCompare(right.filePath);
+						}
 
-					const timeComparison = right.mtimeMs - left.mtimeMs;
-					if (timeComparison === 0) {
-						return left.filePath.localeCompare(right.filePath);
-					}
+						const timeComparison = right.mtimeMs - left.mtimeMs;
+						if (timeComparison === 0) {
+							return left.filePath.localeCompare(right.filePath);
+						}
 
-					return timeComparison;
-				})
-				.map(item => item.filePath);
+						return timeComparison;
+					},
+				)
+				.map((item: {filePath: string; mtimeMs: number}) => item.filePath);
 			const {items: limitedMatches, appliedLimit} = applyHeadLimit(
 				sortedMatches,
 				headLimit,

@@ -2,9 +2,9 @@ import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import {parseDiff} from '../utils/diff.js';
 
-interface DiffViewProps {
-	diff: string;
-}
+type DiffViewProps = {
+	readonly diff: string;
+};
 
 function DiffView({diff}: DiffViewProps) {
 	const lines = parseDiff(diff);
@@ -17,32 +17,41 @@ function DiffView({diff}: DiffViewProps) {
 		<Box flexDirection="column" paddingX={1}>
 			{lines.map((line, i) => {
 				switch (line.type) {
-					case 'header':
+					case 'header': {
 						return (
 							<Text key={i} color="cyan">
 								{line.content}
 							</Text>
 						);
-					case 'add':
+					}
+
+					case 'add': {
 						return (
 							<Text key={i} color="green">
 								{line.content}
 							</Text>
 						);
-					case 'remove':
+					}
+
+					case 'remove': {
 						return (
 							<Text key={i} color="red">
 								{line.content}
 							</Text>
 						);
-					case 'context':
+					}
+
+					case 'context': {
 						return (
 							<Text key={i} dimColor>
 								{line.content}
 							</Text>
 						);
-					default:
+					}
+
+					default: {
 						return <Text key={i}>{line.content}</Text>;
+					}
 				}
 			})}
 		</Box>

@@ -1,46 +1,46 @@
 import test from 'ava';
-import {applyHeadLimit, getPreStatLimit} from './headLimit.js';
-import {getAllowedToolNames, MODES} from './permissions.js';
+import {applyHeadLimit, getPreStatLimit} from './head-limit.js';
+import {getAllowedToolNames, modes} from './permissions.js';
 import type {Mode} from './permissions.js';
 
-// MODES constant tests
+// Modes constant tests
 
-test('MODES has exactly three keys: plan, code, yolo', t => {
-	const keys = Object.keys(MODES);
+test('modes has exactly three keys: plan, code, yolo', t => {
+	const keys = Object.keys(modes);
 	t.deepEqual(keys.sort(), ['code', 'plan', 'yolo']);
 });
 
-test('MODES plan entry has correct label', t => {
-	t.is(MODES.plan.label, 'PLAN');
+test('modes plan entry has correct label', t => {
+	t.is(modes.plan.label, 'PLAN');
 });
 
-test('MODES code entry has correct label', t => {
-	t.is(MODES.code.label, 'CODE');
+test('modes code entry has correct label', t => {
+	t.is(modes.code.label, 'CODE');
 });
 
-test('MODES yolo entry has correct label', t => {
-	t.is(MODES.yolo.label, 'YOLO');
+test('modes yolo entry has correct label', t => {
+	t.is(modes.yolo.label, 'YOLO');
 });
 
-test('MODES plan entry has color blue', t => {
-	t.is(MODES.plan.color, 'blue');
+test('modes plan entry has color blue', t => {
+	t.is(modes.plan.color, 'blue');
 });
 
-test('MODES code entry has color yellow', t => {
-	t.is(MODES.code.color, 'yellow');
+test('modes code entry has color yellow', t => {
+	t.is(modes.code.color, 'yellow');
 });
 
-test('MODES yolo entry has color red', t => {
-	t.is(MODES.yolo.color, 'red');
+test('modes yolo entry has color red', t => {
+	t.is(modes.yolo.color, 'red');
 });
 
-test('MODES each entry has a non-empty description', t => {
-	for (const mode of Object.keys(MODES) as Mode[]) {
-		t.truthy(MODES[mode].description);
+test('modes each entry has a non-empty description', t => {
+	for (const mode of Object.keys(modes) as Mode[]) {
+		t.truthy(modes[mode].description);
 	}
 });
 
-// getAllowedToolNames tests
+// GetAllowedToolNames tests
 
 test('getAllowedToolNames plan returns a Set', t => {
 	const result = getAllowedToolNames('plan');

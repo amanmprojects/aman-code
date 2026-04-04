@@ -1,7 +1,8 @@
-export const EXECUTE_COMMAND_TOOL_NAME = 'executeCommand';
+export const executeCommandToolName = 'executeCommand';
 
-export const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
-export const MAX_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+export const defaultTimeoutMs = 10 * 60 * 1000; // 10 minutes
+export const maxTimeoutMs = 30 * 60 * 1000; // 30 minutes
+export const DEFAULT_TIMEOUT_MS = defaultTimeoutMs;
 
 /**
  * Renders the executeCommand tool description with detailed usage instructions.
@@ -23,7 +24,11 @@ Usage:
 - If your command will create new directories or files, first use this tool to run ls to verify the parent directory exists and is the correct location.
 - Always quote file paths that contain spaces with double quotes in your command (e.g., cd "path with spaces/file.txt")
 - Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of cd. You may use cd if the User explicitly requests it.
-- You may specify an optional timeout in milliseconds (up to ${MAX_TIMEOUT_MS}ms / ${MAX_TIMEOUT_MS / 60000} minutes). By default, your command will timeout after ${DEFAULT_TIMEOUT_MS}ms (${DEFAULT_TIMEOUT_MS / 60000} minutes).
+- You may specify an optional timeout in milliseconds (up to ${maxTimeoutMs}ms / ${
+		maxTimeoutMs / 60_000
+	} minutes). By default, your command will timeout after ${defaultTimeoutMs}ms (${
+		defaultTimeoutMs / 60_000
+	} minutes).
 - You can use the background parameter to run the command in the background and return immediately.
 - When issuing multiple commands:
   - If the commands are independent and can run in parallel, make multiple executeCommand tool calls in a single message

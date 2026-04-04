@@ -1,25 +1,25 @@
 import React, {memo} from 'react';
 import {Box} from 'ink';
-import AssistantMessage from './AssistantMessage.js';
-import UserMessage from './UserMessage.js';
 import {
 	type TranscriptStore,
 	useTranscriptMessage,
 	useTranscriptMessageIds,
-} from '../state/transcriptStore.js';
+} from '../state/transcript-store.js';
+import AssistantMessage from './AssistantMessage.js';
+import UserMessage from './user-message.js';
 
-interface MessageListProps {
-	transcriptStore: TranscriptStore;
-	messageIds?: string[];
-	streamingMessageId?: string;
-	streamingAssistantTailLines?: number;
-}
+type MessageListProps = {
+	readonly transcriptStore: TranscriptStore;
+	readonly messageIds?: string[];
+	readonly streamingMessageId?: string;
+	readonly streamingAssistantTailLines?: number;
+};
 
-interface MessageRowProps {
-	id: string;
-	transcriptStore: TranscriptStore;
-	tailLines?: number;
-}
+type MessageRowProps = {
+	readonly id: string;
+	readonly transcriptStore: TranscriptStore;
+	readonly tailLines?: number;
+};
 
 /**
  * Renders a vertical list of chat messages.

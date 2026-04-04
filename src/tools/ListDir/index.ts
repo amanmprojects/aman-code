@@ -1,8 +1,8 @@
-import {tool} from 'ai';
-import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {tool} from 'ai';
+import {z} from 'zod';
+import {isBlockedDevicePath, isUNCPath} from '../path-guards.js';
 import {getListDirDescription} from './prompt.js';
 
 const DEFAULT_LIMIT = 200;
@@ -13,8 +13,8 @@ type DirectoryEntryResult = {
 	name: string;
 	path: string;
 	type: EntryType;
-	size: number | null;
-	children: number | null;
+	size: number | undefined;
+	children: number | undefined;
 };
 
 const ENTRY_PROCESSING_CONCURRENCY = 10;
@@ -76,7 +76,8 @@ async function mapWithConcurrency<T, U>(
 	concurrency: number,
 	mapper: (item: T) => Promise<U>,
 ): Promise<U[]> {
-	const results = new Array<U>(items.length);
+	const results: U[] = [];
+	results.length = items.length;
 	let nextIndex = 0;
 
 	async function worker(): Promise<void> {
@@ -126,11 +127,11 @@ export const listDir = tool({
 				'Maximum number of directory entries to return. Defaults to 200.',
 			),
 	}),
-	execute: async ({
+	async execute({
 		path: inputPath,
 		includeHidden = false,
 		limit = DEFAULT_LIMIT,
-	}) => {
+	}) {
 		try {
 			const resolvedPath = inputPath ? path.resolve(inputPath) : process.cwd();
 
@@ -149,6 +150,7 @@ export const listDir = tool({
 					}. This path would block or produce infinite output.`,
 				};
 			}
+
 			const stat = await fs.stat(resolvedPath);
 
 			if (!stat.isDirectory()) {
@@ -180,19 +182,19 @@ export const listDir = tool({
 							name: entry.name,
 							path: toDisplayPath(absoluteEntryPath),
 							type,
-							size: type === 'file' ? entryStat.size : null,
+							size: type === 'file' ? entryStat.size : undefined,
 							children:
 								type === 'directory'
 									? await countChildren(absoluteEntryPath)
-									: null,
+									: undefined,
 						};
 					} catch {
 						return {
 							name: entry.name,
 							path: toDisplayPath(absoluteEntryPath),
 							type: 'other',
-							size: null,
-							children: null,
+							size: undefined,
+							children: undefined,
 						};
 					}
 				},

@@ -1,3 +1,4 @@
+import process from 'node:process';
 import {tool} from 'ai';
 import {tavilySearch} from '@tavily/ai-sdk';
 import {z} from 'zod';
@@ -18,7 +19,7 @@ export const webSearch = tool({
 			.optional()
 			.describe('Optional recency filter for web results.'),
 	}),
-	execute: async (input, options) => {
+	async execute(input, options) {
 		if (!process.env['TAVILY_API_KEY']) {
 			return {
 				error:
@@ -26,15 +27,15 @@ export const webSearch = tool({
 			};
 		}
 
-		const execute = tavilyTool.execute;
-		if (execute == null) {
+		const {execute} = tavilyTool;
+		if (execute === null) {
 			return {
 				error: 'Tavily search tool is unavailable in the current installation.',
 			};
 		}
 
 		try {
-			return await execute(input, options);
+			return await execute!(input, options);
 		} catch (error: unknown) {
 			const message =
 				error instanceof Error

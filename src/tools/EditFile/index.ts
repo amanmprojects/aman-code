@@ -1,9 +1,9 @@
-import {tool} from 'ai';
-import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import {tool} from 'ai';
+import {z} from 'zod';
 import {createPatch} from 'diff';
-import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {isBlockedDevicePath, isUNCPath} from '../path-guards.js';
 import {getEditFileDescription} from './prompt.js';
 
 /**
@@ -82,7 +82,7 @@ export const editFile = tool({
 				'If true, replace all occurrences of oldString. Default: false.',
 			),
 	}),
-	execute: async ({filePath, oldString, newString, replaceAll = false}) => {
+	async execute({filePath, oldString, newString, replaceAll = false}) {
 		try {
 			const resolved = path.resolve(filePath);
 
@@ -119,7 +119,7 @@ export const editFile = tool({
 				return {error: `Path is a directory, not a file: ${resolved}`};
 			}
 
-			const original = await fs.readFile(resolved, 'utf-8');
+			const original = await fs.readFile(resolved, 'utf8');
 
 			if (oldString === newString) {
 				return {

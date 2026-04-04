@@ -1,18 +1,18 @@
 import React from 'react';
 import {Box, Text} from 'ink';
-import MessageList from './MessageList.js';
 import {
 	type TranscriptStore,
 	useTranscriptMessageIds,
-} from '../state/transcriptStore.js';
+} from '../state/transcript-store.js';
+import MessageList from './message-list.js';
 
-interface ConversationPanelProps {
-	transcriptStore: TranscriptStore;
-	isLoading: boolean;
-	error: string | null;
-}
+type ConversationPanelProps = {
+	readonly transcriptStore: TranscriptStore;
+	readonly isLoading: boolean;
+	readonly error: string | undefined;
+};
 
-const STREAMING_VISIBLE_ASSISTANT_LINES = 28;
+const streamingVisibleAssistantLines = 28;
 
 function ConversationPanel({
 	transcriptStore,
@@ -28,7 +28,7 @@ function ConversationPanel({
 				transcriptStore={transcriptStore}
 				streamingMessageId={streamingMessageId}
 				streamingAssistantTailLines={
-					isLoading ? STREAMING_VISIBLE_ASSISTANT_LINES : undefined
+					isLoading ? streamingVisibleAssistantLines : undefined
 				}
 			/>
 			{error && (

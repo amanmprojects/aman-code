@@ -15,7 +15,7 @@ import type {UIMessage} from 'ai';
 const SESSIONS_DIR = join(homedir(), '.aman-code', 'sessions');
 const INDEX_FILE_NAME = 'index.json';
 const INDEX_LOCK_FILE_NAME = 'index.json.lock';
-const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const SESSION_ID_PATTERN = /^[\w-]+$/;
 const VALID_MESSAGE_ROLES = new Set(['system', 'user', 'assistant', 'tool']);
 const INDEX_LOCK_RETRY_DELAYS_MS = [10, 25, 50, 100, 200, 400];
 
@@ -119,9 +119,9 @@ function getErrorCode(error: unknown): string | undefined {
 		error != null &&
 		typeof error === 'object' &&
 		'code' in error &&
-		typeof error['code'] === 'string'
+		typeof error.code === 'string'
 	) {
-		return error['code'];
+		return error.code;
 	}
 
 	return undefined;
@@ -133,18 +133,18 @@ async function sleep(milliseconds: number): Promise<void> {
 	});
 }
 
-export interface SessionMetadata {
+export type SessionMetadata = {
 	id: string;
 	title: string;
 	createdAt: string;
 	updatedAt: string;
 	mode: string;
 	cwd: string;
-}
+};
 
-export interface Session extends SessionMetadata {
+export type Session = {
 	messages: UIMessage[];
-}
+} & SessionMetadata;
 
 let sessionCounter = 0;
 
@@ -195,7 +195,7 @@ function isSessionMetadata(value: unknown): value is SessionMetadata {
 
 async function readIndex(): Promise<SessionMetadata[]> {
 	try {
-		const raw = await readFile(getIndexFilePath(), 'utf-8');
+		const raw = await readFile(getIndexFilePath(), 'utf8');
 		const parsed = JSON.parse(raw) as unknown;
 		if (!Array.isArray(parsed)) {
 			return [];
@@ -216,22 +216,22 @@ function sortIndexEntries(entries: SessionMetadata[]): SessionMetadata[] {
 async function writeIndex(entries: SessionMetadata[]): Promise<void> {
 	const sorted = sortIndexEntries(entries);
 	const indexFilePath = getIndexFilePath();
-	const tempFilePath = `${indexFilePath}.${
+	const temporaryFilePath = `${indexFilePath}.${
 		process.pid
 	}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`;
 
 	try {
-		await writeFile(tempFilePath, JSON.stringify(sorted, null, 2), 'utf-8');
-		await rename(tempFilePath, indexFilePath);
+		await writeFile(temporaryFilePath, JSON.stringify(sorted, null, 2), 'utf8');
+		await rename(temporaryFilePath, indexFilePath);
 	} finally {
-		await unlink(tempFilePath).catch(() => {});
+		await unlink(temporaryFilePath).catch(() => {});
 	}
 }
 
 async function withIndexLock<T>(action: () => Promise<T>): Promise<T> {
 	await ensureSessionDir();
 	const lockFilePath = getIndexLockFilePath();
-	let lockHandle: Awaited<ReturnType<typeof open>> | null = null;
+	let lockHandle: Awaited<ReturnType<typeof open>> | undefined;
 
 	for (let attempt = 0; ; attempt += 1) {
 		try {
@@ -275,7 +275,7 @@ export async function saveSession(session: Session): Promise<void> {
 	await ensureSessionDir();
 
 	const filePath = getSessionFilePath(session.id);
-	await writeFile(filePath, JSON.stringify(session, null, 2), 'utf-8');
+	await writeFile(filePath, JSON.stringify(session, null, 2), 'utf8');
 
 	await withIndexLock(async () => {
 		const index = await readIndex();
@@ -292,14 +292,14 @@ export async function saveSession(session: Session): Promise<void> {
 	});
 }
 
-export async function loadSession(id: string): Promise<Session | null> {
+export async function loadSession(id: string): Promise<Session | undefined> {
 	if (!isValidSessionId(id)) {
-		return null;
+		return undefined;
 	}
 
 	try {
 		const filePath = getSessionFilePath(id);
-		const raw = await readFile(filePath, 'utf-8');
+		const raw = await readFile(filePath, 'utf8');
 		const session = JSON.parse(raw) as Session;
 
 		if (
@@ -309,12 +309,12 @@ export async function loadSession(id: string): Promise<Session | null> {
 			!Array.isArray(session.messages) ||
 			!session.messages.every(message => isValidUIMessage(message))
 		) {
-			return null;
+			return undefined;
 		}
 
 		return session;
 	} catch {
-		return null;
+		return undefined;
 	}
 }
 
@@ -337,7 +337,7 @@ export async function listSessions(): Promise<SessionMetadata[]> {
 
 		for (const file of sessionFiles) {
 			try {
-				const raw = await readFile(join(sessionsDir, file), 'utf-8');
+				const raw = await readFile(join(sessionsDir, file), 'utf8');
 				const session = JSON.parse(raw) as Session;
 				if (
 					typeof session.id === 'string' &&

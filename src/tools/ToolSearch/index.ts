@@ -12,7 +12,7 @@ import {getToolSearchDescription} from './prompt.js';
 function tokenize(value: string): string[] {
 	return value
 		.toLowerCase()
-		.split(/[^a-z0-9]+/)
+		.split(/[^a-z\d]+/)
 		.filter(Boolean);
 }
 
@@ -38,7 +38,7 @@ function scoreTool(name: ToolName, query: string): number {
 		metadata.description,
 		metadata.allowedModes.join(' '),
 		...(metadata.interactive === true ? ['interactive'] : []),
-		...(metadata.readOnly === true ? ['read-only', 'readonly'] : []),
+		...(metadata.readOnly ? ['read-only', 'readonly'] : []),
 	];
 	const haystack = `${name} ${metadataFacets.join(' ')}`.toLowerCase();
 	if (haystack.includes(lowerQuery)) {
@@ -47,7 +47,7 @@ function scoreTool(name: ToolName, query: string): number {
 
 	const queryTokens = tokenize(lowerQuery);
 	const haystackTokens = new Set(tokenize(haystack));
-	const haystackArray = Array.from(haystackTokens);
+	const haystackArray = [...haystackTokens];
 	let score = 0;
 
 	for (const token of queryTokens) {
@@ -79,11 +79,11 @@ export const toolSearch = tool({
 			.optional()
 			.describe('If true, only return tools that are read-only.'),
 	}),
-	execute: async ({
+	async execute({
 		query = '',
 		includeInteractiveOnly = false,
 		includeReadOnlyOnly = false,
-	}) => {
+	}) {
 		const results = allToolNames
 			.map(name => {
 				const metadata = getToolMetadata(name);
@@ -95,7 +95,7 @@ export const toolSearch = tool({
 					return null;
 				}
 
-				if (includeReadOnlyOnly && metadata.readOnly !== true) {
+				if (includeReadOnlyOnly && !metadata.readOnly) {
 					return null;
 				}
 

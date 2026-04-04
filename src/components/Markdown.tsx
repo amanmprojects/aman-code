@@ -3,18 +3,16 @@ import {Text} from 'ink';
 import {marked} from 'marked';
 import * as MarkedTerminalModule from 'marked-terminal';
 
-interface MarkdownProps {
-	children: string;
-	cacheKey?: string;
-}
+type MarkdownProps = {
+	readonly children: string;
+	readonly cacheKey?: string;
+};
 
-const markedTerminal = (
-	MarkedTerminalModule as unknown as {
-		markedTerminal: () => {
-			renderer: Record<string, (...arguments_: unknown[]) => string>;
-		};
-	}
-).markedTerminal;
+const {markedTerminal} = MarkedTerminalModule as unknown as {
+	markedTerminal: () => {
+		renderer: Record<string, (...arguments_: unknown[]) => string>;
+	};
+};
 
 const MAX_MARKDOWN_CACHE_ENTRIES = 200;
 const markdownByPartCache = new Map<

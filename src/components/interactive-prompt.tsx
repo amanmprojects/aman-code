@@ -2,12 +2,14 @@ import React, {useEffect, useMemo, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import type {PendingInteraction} from '../hooks/useAgent.js';
 
-interface InteractivePromptProps {
-	interaction: PendingInteraction;
-	onApprove: (approved: boolean) => void | Promise<void>;
-	onSubmitAnswer: (selectedOptionIds: string[]) => void | Promise<void>;
-	disabled?: boolean;
-}
+type InteractivePromptProps = {
+	readonly interaction: PendingInteraction;
+	readonly onApprove: (approved: boolean) => void | Promise<void>;
+	readonly onSubmitAnswer: (
+		selectedOptionIds: string[],
+	) => void | Promise<void>;
+	readonly isDisabled?: boolean;
+};
 
 /**
  * Renders an Ink-based interactive terminal prompt for either an approval confirmation or a selectable question.
@@ -15,14 +17,14 @@ interface InteractivePromptProps {
  * @param interaction - The pending interaction that defines prompt kind, question text, options, whether multiple selection is allowed, and optional detail
  * @param onApprove - Callback invoked with `true` for approval or `false` for denial when an approval prompt is submitted
  * @param onSubmitAnswer - Callback invoked with the array of selected option IDs when a question prompt is submitted
- * @param disabled - When `true`, disables input handling (defaults to `false`)
+ * @param isDisabled - When `true`, disables input handling (defaults to `false`)
  * @returns The rendered Ink UI element for the interactive prompt
  */
 export default function InteractivePrompt({
 	interaction,
 	onApprove,
 	onSubmitAnswer,
-	disabled = false,
+	isDisabled = false,
 }: InteractivePromptProps) {
 	const [cursor, setCursor] = useState(0);
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -55,7 +57,7 @@ export default function InteractivePrompt({
 
 	useInput(
 		(input, key) => {
-			if (disabled || options.length === 0) {
+			if (isDisabled || options.length === 0) {
 				return;
 			}
 
@@ -106,6 +108,7 @@ export default function InteractivePrompt({
 							setSubmitting(false);
 						}
 					})();
+
 					return;
 				}
 
@@ -130,7 +133,7 @@ export default function InteractivePrompt({
 				})();
 			}
 		},
-		{isActive: !disabled && !submitting},
+		{isActive: !isDisabled && !submitting},
 	);
 
 	return (

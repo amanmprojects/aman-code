@@ -2,18 +2,20 @@ import React, {memo, useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import InteractivePrompt from './InteractivePrompt.js';
 import type {PendingInteraction} from '../hooks/useAgent.js';
-import {formatUiPerfDuration, logUiPerf} from '../utils/uiPerf.js';
+import {formatUiPerfDuration, logUiPerf} from '../utils/ui-perf.js';
+import InteractivePrompt from './interactive-prompt.js';
 
-interface ComposerPanelProps {
-	pendingInteraction: PendingInteraction | null;
-	isLoading: boolean;
-	interactionError: string | null;
-	onSubmitMessage: (value: string) => void;
-	onApprove: (approved: boolean) => void | Promise<void>;
-	onSubmitAnswer: (selectedOptionIds: string[]) => void | Promise<void>;
-}
+type ComposerPanelProps = {
+	readonly pendingInteraction: PendingInteraction | undefined;
+	readonly isLoading: boolean;
+	readonly interactionError: string | undefined;
+	readonly onSubmitMessage: (value: string) => void;
+	readonly onApprove: (approved: boolean) => void | Promise<void>;
+	readonly onSubmitAnswer: (
+		selectedOptionIds: string[],
+	) => void | Promise<void>;
+};
 
 function ComposerPanel({
 	pendingInteraction,
@@ -24,7 +26,7 @@ function ComposerPanel({
 	onSubmitAnswer,
 }: ComposerPanelProps) {
 	const [input, setInput] = useState('');
-	const lastInputAtRef = useRef<number | null>(null);
+	const lastInputAtRef = useRef<number | undefined>(undefined);
 
 	useEffect(() => {
 		if (pendingInteraction) {
@@ -37,7 +39,7 @@ function ComposerPanel({
 		const previousInputAt = lastInputAtRef.current;
 		lastInputAtRef.current = now;
 
-		if (previousInputAt != null) {
+		if (previousInputAt !== undefined) {
 			logUiPerf('input_change', {
 				deltaMs: formatUiPerfDuration(now - previousInputAt),
 				length: value.length,
@@ -56,11 +58,11 @@ function ComposerPanel({
 
 			const now = performance.now();
 			const previousInputAt = lastInputAtRef.current;
-			lastInputAtRef.current = null;
+			lastInputAtRef.current = undefined;
 
 			logUiPerf('input_submit', {
 				idleMs:
-					previousInputAt == null
+					previousInputAt === undefined
 						? undefined
 						: formatUiPerfDuration(now - previousInputAt),
 				length: trimmed.length,
@@ -77,9 +79,9 @@ function ComposerPanel({
 			<Box flexDirection="column">
 				<InteractivePrompt
 					interaction={pendingInteraction}
+					isDisabled={isLoading}
 					onApprove={onApprove}
 					onSubmitAnswer={onSubmitAnswer}
-					disabled={isLoading}
 				/>
 				{interactionError && (
 					<Box marginTop={1}>
@@ -97,14 +99,23 @@ function ComposerPanel({
 			borderRight={false}
 			flexDirection="row"
 		>
-			<Text>{isLoading ? <> <Spinner type="dots" /> </> : ' ❯ '}</Text>
+			<Text>
+				{isLoading ? (
+					<>
+						{' '}
+						<Spinner type="dots" />{' '}
+					</>
+				) : (
+					' ❯ '
+				)}
+			</Text>
 			<TextInput
 				value={input}
-				onChange={handleChange}
-				onSubmit={handleSubmit}
 				placeholder={
 					isLoading ? 'Waiting for response...' : 'Ask me anything...'
 				}
+				onChange={handleChange}
+				onSubmit={handleSubmit}
 			/>
 		</Box>
 	);

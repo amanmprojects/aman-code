@@ -1,8 +1,8 @@
-import {tool} from 'ai';
-import {z} from 'zod';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {tool} from 'ai';
+import {z} from 'zod';
+import {isBlockedDevicePath, isUNCPath} from '../path-guards.js';
 import {getGlobSearchDescription} from './prompt.js';
 
 const DEFAULT_LIMIT = 100;
@@ -259,7 +259,7 @@ export const globSearch = tool({
 				'If true, scan the full tree and return totalMatches. Default: false.',
 			),
 	}),
-	execute: async ({
+	async execute({
 		pattern,
 		path: inputPath,
 		searchPath,
@@ -269,7 +269,7 @@ export const globSearch = tool({
 		offset = 0,
 		limit = DEFAULT_LIMIT,
 		includeTotalMatches = false,
-	}) => {
+	}) {
 		const start = Date.now();
 		try {
 			const requestedPath = inputPath ?? searchPath;
@@ -295,6 +295,7 @@ export const globSearch = tool({
 					}. This path would block or produce infinite output.`,
 				};
 			}
+
 			const excludePatterns = excludes.map(value => globToRegExp(value));
 			let stats;
 

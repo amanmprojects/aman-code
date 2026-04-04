@@ -1,4 +1,4 @@
-export const WEB_SEARCH_TOOL_NAME = 'webSearch';
+export const webSearchToolName = 'webSearch';
 
 /**
  * Renders the webSearch tool description with detailed usage instructions.

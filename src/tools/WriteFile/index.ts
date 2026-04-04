@@ -1,8 +1,8 @@
-import {tool} from 'ai';
-import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {tool} from 'ai';
+import {z} from 'zod';
+import {isBlockedDevicePath, isUNCPath} from '../path-guards.js';
 import {getWriteFileDescription} from './prompt.js';
 
 export const writeFile = tool({
@@ -19,7 +19,7 @@ export const writeFile = tool({
 				'If true, allow overwriting an existing file. Defaults to false.',
 			),
 	}),
-	execute: async ({filePath, content, overwrite = false}) => {
+	async execute({filePath, content, overwrite = false}) {
 		try {
 			const resolved = path.resolve(filePath);
 			const dir = path.dirname(resolved);

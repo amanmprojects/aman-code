@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import 'dotenv/config.js';
 import React from 'react';
-import { render } from 'ink';
+import {render} from 'ink';
 import meow from 'meow';
 import App from './app.js';
-import type { Mode } from './utils/permissions.js';
-import { listSessions, loadSession } from './state/sessionStore.js';
+import type {Mode} from './utils/permissions.js';
+import {listSessions, loadSession} from './state/sessionStore.js';
 
 const cli = meow(
 	`
@@ -46,9 +46,9 @@ const cli = meow(
 	},
 );
 
-const mode = (['plan', 'code', 'yolo'].includes(cli.flags.mode)
-	? cli.flags.mode
-	: 'code') as Mode;
+const mode = (
+	['plan', 'code', 'yolo'].includes(cli.flags.mode) ? cli.flags.mode : 'code'
+) as Mode;
 
 async function main() {
 	if (cli.flags.list) {
@@ -59,7 +59,9 @@ async function main() {
 			console.log('Recent sessions:\n');
 			for (const session of sessions.slice(0, 20)) {
 				const date = new Date(session.updatedAt).toLocaleString();
-				console.log(`  ${session.id}  ${date}  [${session.mode}]  ${session.title}`);
+				console.log(
+					`  ${session.id}  ${date}  [${session.mode}]  ${session.title}`,
+				);
 				console.log(`    cwd: ${session.cwd}`);
 			}
 		}
@@ -90,9 +92,9 @@ async function main() {
 			process.exit(1);
 		}
 
-		const sessionMode = (['plan', 'code', 'yolo'].includes(session.mode)
-			? session.mode
-			: mode) as Mode;
+		const sessionMode = (
+			['plan', 'code', 'yolo'].includes(session.mode) ? session.mode : mode
+		) as Mode;
 
 		render(
 			<App

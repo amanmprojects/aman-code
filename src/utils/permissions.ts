@@ -1,13 +1,12 @@
 import {
 	getAllowedToolNamesForMode,
 	getReadOnlyToolNames,
-	isInteractiveToolName,
 	type ToolName,
 } from '../tools/toolMetadata.js';
 
 export type Mode = 'plan' | 'code' | 'yolo';
 
-export const MODES: Record<
+export const modes: Record<
 	Mode,
 	{label: string; color: string; description: string}
 > = {
@@ -28,7 +27,7 @@ export const MODES: Record<
 	},
 };
 
-const READ_ONLY_TOOLS = getReadOnlyToolNames();
+const readOnlyTools = getReadOnlyToolNames();
 
 /**
  * Retrieve the set of tool names allowed for the specified mode.
@@ -47,7 +46,7 @@ export function getAllowedToolNames(mode: Mode): Set<ToolName> {
  * @returns `true` if the given name corresponds to a read-only tool, `false` otherwise.
  */
 export function isReadOnlyToolName(name: string): boolean {
-	return READ_ONLY_TOOLS.has(name as ToolName);
+	return readOnlyTools.has(name as ToolName);
 }
 
 /**
@@ -56,4 +55,5 @@ export function isReadOnlyToolName(name: string): boolean {
  * @param name - The tool name to check
  * @returns `true` if the tool is interactive, `false` otherwise
  */
-export {isInteractiveToolName as isInteractiveTool};
+
+export {isInteractiveToolName as isInteractiveTool} from '../tools/toolMetadata.js';

@@ -1,9 +1,9 @@
-import {tool} from 'ai';
-import {z} from 'zod';
 import * as fs from 'node:fs/promises';
 import {createReadStream, type Stats} from 'node:fs';
 import * as path from 'node:path';
-import {isBlockedDevicePath, isUNCPath} from '../pathGuards.js';
+import {z} from 'zod';
+import {tool} from 'ai';
+import {isBlockedDevicePath, isUNCPath} from '../path-guards.js';
 import {getReadFileDescription} from './prompt.js';
 
 // Maximum file size for full reads (256KB)
@@ -108,17 +108,19 @@ async function isBinaryFile(filePath: string): Promise<boolean> {
 async function findSimilarFiles(
 	targetPath: string,
 	cwd: string,
-): Promise<string | null> {
+): Promise<string | undefined> {
 	try {
 		const dir = path.dirname(targetPath);
 		const targetName = path.basename(targetPath).toLowerCase();
 
 		// Check if directory exists
-		const dirStat = await fs.stat(dir).catch(() => null);
-		if (!dirStat?.isDirectory()) return null;
+		const dirStat = await fs.stat(dir).catch(() => undefined);
+		if (!dirStat?.isDirectory()) return undefined;
 
 		const entries = await fs.readdir(dir, {withFileTypes: true});
-		const files = entries.filter(e => e.isFile()).map(e => e.name);
+		const files = entries
+			.filter(entry => entry.isFile())
+			.map(entry => entry.name);
 
 		// Find files with similar names
 		const similar = files.filter(f => {
@@ -142,13 +144,14 @@ async function findSimilarFiles(
 			if (!relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
 				return relativePath.replaceAll(path.sep, '/');
 			}
+
 			return similar[0]!;
 		}
 	} catch {
 		// Ignore errors in suggestion logic
 	}
 
-	return null;
+	return undefined;
 }
 
 /**
@@ -158,12 +161,16 @@ async function findSimilarFiles(
  * @param cwd - The base directory used to compute a relative path (typically `process.cwd()`)
  * @returns The relative path with `/` as separators when `targetPath` is within `cwd`, `null` otherwise
  */
-function suggestPathUnderCwd(targetPath: string, cwd: string): string | null {
+function suggestPathUnderCwd(
+	targetPath: string,
+	cwd: string,
+): string | undefined {
 	// If the path doesn't exist, try to suggest a path relative to cwd
 	const relativePath = path.relative(cwd, targetPath);
 	if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-		return null;
+		return undefined;
 	}
+
 	return relativePath.replaceAll(path.sep, '/');
 }
 
@@ -182,7 +189,7 @@ export const readFile = tool({
 			.optional()
 			.describe('Number of lines to read from the offset'),
 	}),
-	execute: async ({filePath, offset, limit}) => {
+	async execute({filePath, offset, limit}) {
 		const cwd = process.cwd();
 
 		try {
@@ -226,6 +233,7 @@ export const readFile = tool({
 
 					return {error: message};
 				}
+
 				throw error;
 			}
 
@@ -264,7 +272,7 @@ export const readFile = tool({
 			}
 
 			// Read the file
-			const content = await fs.readFile(resolved, 'utf-8');
+			const content = await fs.readFile(resolved, 'utf8');
 			const lines = content.split('\n');
 			const totalLines = lines.length;
 
@@ -320,12 +328,15 @@ export const readFile = tool({
 			if (error?.code === 'EACCES' || error?.code === 'EPERM') {
 				return {error: `Permission denied: ${filePath}`};
 			}
+
 			if (error?.code === 'EISDIR') {
 				return {error: `Path is a directory: ${filePath}`};
 			}
+
 			if (error?.code === 'ENOTDIR') {
 				return {error: `Not a directory in path: ${filePath}`};
 			}
+
 			if (error?.code === 'ENAMETOOLONG') {
 				return {error: `File path too long: ${filePath}`};
 			}

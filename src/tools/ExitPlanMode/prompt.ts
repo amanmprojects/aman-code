@@ -1,4 +1,4 @@
-export const EXIT_PLAN_MODE_TOOL_NAME = 'exitPlanMode';
+export const exitPlanModeToolName = 'exitPlanMode';
 
 /**
  * Renders the exitPlanMode tool description with detailed usage instructions.
