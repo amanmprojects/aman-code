@@ -7,6 +7,7 @@ import {
 	createAgentUIStream,
 	isToolUIPart,
 	readUIMessageStream,
+	type ToolExecutionOptions,
 	type UIMessage,
 } from 'ai';
 import {formatUiPerfDuration, logUiPerf} from '../utils/uiPerf.js';
@@ -122,7 +123,7 @@ function getToolName(part: ToolPart): string {
  *
  * @param baseMessages - The existing conversation messages in order.
  * @param assistantMessage - The assistant message to append or use as a replacement.
- * @returns The new message array where `assistantMessage` replaces the last message if it has `role === 'assistant'`, otherwise `assistantMessage` is appended. 
+ * @returns The new message array where `assistantMessage` replaces the last message if it has `role === 'assistant'`, otherwise `assistantMessage` is appended.
  */
 function mergeAssistantMessage(
 	baseMessages: UIMessage[],
@@ -359,7 +360,8 @@ export function useAgent(mode: Mode) {
 		);
 		messagesRef.current = normalizedMessages;
 		transcriptStoreRef.current.setMessages(normalizedMessages);
-		const nextPendingInteraction = extractPendingInteraction(normalizedMessages);
+		const nextPendingInteraction =
+			extractPendingInteraction(normalizedMessages);
 		setPendingInteraction(previousInteraction => {
 			if (previousInteraction == null && nextPendingInteraction == null) {
 				return previousInteraction;
@@ -566,14 +568,16 @@ export function useAgent(mode: Mode) {
 
 			let nextMessages: UIMessage[];
 
-			if (options.approved && tool && 'execute' in tool && tool.execute) {
+			if (options.approved && tool.execute != null) {
 				// Execute the tool and transition to output-available
 				try {
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const output = await (tool as any).execute(input, {
+					const toolExecutionOptions: ToolExecutionOptions = {
+						toolCallId: options.toolCallId,
+						messages: [],
 						abortSignal: undefined,
 						experimental_context: {mode: options.overrideMode ?? mode},
-					});
+					};
+					const output = await tool.execute(input, toolExecutionOptions);
 
 					nextMessages = updateToolPartInMessages({
 						messages: messagesRef.current,
@@ -619,7 +623,7 @@ export function useAgent(mode: Mode) {
 					});
 				}
 			} else if (options.approved) {
-				// Approved but no execute function - transition to output-denied
+				// Approved but no execute function - transition to output-error
 				// This shouldn't happen for tools with needsApproval, but handle gracefully
 				nextMessages = updateToolPartInMessages({
 					messages: messagesRef.current,
@@ -636,10 +640,11 @@ export function useAgent(mode: Mode) {
 
 						return {
 							...basePart,
-							state: 'output-denied',
+							state: 'output-error',
+							errorText: options.reason ?? 'Tool execution not available',
 							approval: {
 								id: options.approvalId,
-								approved: false,
+								approved: true,
 								reason: options.reason ?? 'Tool execution not available',
 							},
 						} as ToolPart;

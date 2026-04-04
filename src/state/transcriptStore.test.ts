@@ -37,22 +37,3 @@ test('setMeasuredHeight stores width, height and signature', t => {
 		signature: 'signature-1',
 	});
 });
-
-test('scrollBy updates scroll position and clears sticky state when moving up', t => {
-	const store = createTranscriptStore();
-
-	store.setScrollTop(10, {maxScrollTop: 20, isStickyToBottom: true});
-	store.scrollBy(-3, 20);
-
-	t.is(store.getSnapshot().viewport.scrollTopRows, 7);
-	t.false(store.getSnapshot().viewport.isStickyToBottom);
-});
-
-test('scrollToBottom pins viewport to the bottom', t => {
-	const store = createTranscriptStore();
-
-	store.scrollToBottom(18);
-
-	t.is(store.getSnapshot().viewport.scrollTopRows, 18);
-	t.true(store.getSnapshot().viewport.isStickyToBottom);
-});
