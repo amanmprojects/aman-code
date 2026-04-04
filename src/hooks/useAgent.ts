@@ -1,4 +1,4 @@
-import {useState, useCallback, useRef} from 'react';
+import {useState, useCallback, useRef, useEffect} from 'react';
 import {createAgent} from '../agent/index.js';
 import type {Mode} from '../utils/permissions.js';
 import {getAllowedToolNames} from '../utils/permissions.js';
@@ -16,6 +16,12 @@ import {
 	createTranscriptStore,
 	type TranscriptStore,
 } from '../state/transcriptStore.js';
+import {
+	saveSession,
+	deriveTitle,
+	generateSessionId,
+	type Session,
+} from '../state/sessionStore.js';
 
 type ToolPart = Extract<UIMessage['parts'][number], {toolCallId: string}>;
 
@@ -342,43 +348,109 @@ function extractPendingInteraction(
  *  - `submitToolApproval(options)`: submit an approval response for a tool UI part and rerun the agent
  *  - `submitToolOutput(options)`: submit tool output for a tool UI part and rerun the agent
  */
-export function useAgent(mode: Mode) {
+interface UseAgentOptions {
+	initialMessages?: UIMessage[];
+	sessionId?: string;
+}
+
+export function useAgent(mode: Mode, options?: UseAgentOptions) {
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [pendingInteraction, setPendingInteraction] =
 		useState<PendingInteraction | null>(null);
 	const agentRef = useRef(createAgent());
 	const transcriptStoreRef = useRef<TranscriptStore>(createTranscriptStore());
-	const messagesRef = useRef<UIMessage[]>([]);
+	const messagesRef = useRef<UIMessage[]>(options?.initialMessages ?? []);
 	const agentRunIdRef = useRef(0);
 	const agentAbortRef = useRef<AbortController | null>(null);
+	const sessionIdRef = useRef(options?.sessionId ?? generateSessionId());
+	const sessionCreatedAtRef = useRef(new Date().toISOString());
+	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const modeRef = useRef(mode);
 
-	const setConversation = useCallback((nextMessages: UIMessage[]) => {
-		const normalizedMessages = normalizeMessages(
-			nextMessages,
-			messagesRef.current,
-		);
-		messagesRef.current = normalizedMessages;
-		transcriptStoreRef.current.setMessages(normalizedMessages);
-		const nextPendingInteraction =
-			extractPendingInteraction(normalizedMessages);
-		setPendingInteraction(previousInteraction => {
-			if (previousInteraction == null && nextPendingInteraction == null) {
-				return previousInteraction;
-			}
-
-			if (
-				previousInteraction != null &&
-				nextPendingInteraction != null &&
-				JSON.stringify(previousInteraction) ===
-					JSON.stringify(nextPendingInteraction)
-			) {
-				return previousInteraction;
-			}
-
-			return nextPendingInteraction;
-		});
+	// Hydrate transcript store with initial messages on mount
+	useEffect(() => {
+		if (options?.initialMessages && options.initialMessages.length > 0) {
+			transcriptStoreRef.current.setMessages(options.initialMessages);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
+
+	useEffect(() => {
+		modeRef.current = mode;
+	}, [mode]);
+
+	useEffect(
+		() => () => {
+			if (saveTimerRef.current) {
+				clearTimeout(saveTimerRef.current);
+				saveTimerRef.current = null;
+			}
+		},
+		[],
+	);
+
+	const scheduleSave = useCallback((messages: UIMessage[]) => {
+		if (saveTimerRef.current) {
+			clearTimeout(saveTimerRef.current);
+		}
+
+		saveTimerRef.current = setTimeout(() => {
+			saveTimerRef.current = null;
+			if (messages.length === 0) {
+				return;
+			}
+
+			const session: Session = {
+				id: sessionIdRef.current,
+				title: deriveTitle(messages),
+				createdAt: sessionCreatedAtRef.current,
+				updatedAt: new Date().toISOString(),
+				mode: modeRef.current,
+				cwd: process.cwd(),
+				messages,
+			};
+
+			void saveSession(session).catch(error => {
+				console.error('Failed to save session', {
+					error,
+					sessionId: session.id,
+					messageCount: session.messages.length,
+				});
+			});
+		}, 2000);
+	}, []);
+
+	const setConversation = useCallback(
+		(nextMessages: UIMessage[]) => {
+			const normalizedMessages = normalizeMessages(
+				nextMessages,
+				messagesRef.current,
+			);
+			messagesRef.current = normalizedMessages;
+			transcriptStoreRef.current.setMessages(normalizedMessages);
+			scheduleSave(normalizedMessages);
+			const nextPendingInteraction =
+				extractPendingInteraction(normalizedMessages);
+			setPendingInteraction(previousInteraction => {
+				if (previousInteraction == null && nextPendingInteraction == null) {
+					return previousInteraction;
+				}
+
+				if (
+					previousInteraction != null &&
+					nextPendingInteraction != null &&
+					JSON.stringify(previousInteraction) ===
+						JSON.stringify(nextPendingInteraction)
+				) {
+					return previousInteraction;
+				}
+
+				return nextPendingInteraction;
+			});
+		},
+		[scheduleSave],
+	);
 
 	const runAgent = useCallback(
 		async (baseMessages: UIMessage[], runMode: Mode) => {
@@ -719,6 +791,7 @@ export function useAgent(mode: Mode) {
 	);
 
 	return {
+		sessionId: sessionIdRef.current,
 		transcriptStore: transcriptStoreRef.current,
 		isLoading,
 		error,

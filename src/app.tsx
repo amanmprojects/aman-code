@@ -8,8 +8,12 @@ import {useAgent} from './hooks/useAgent.js';
 import type {Mode} from './utils/permissions.js';
 import {formatUiPerfDuration, logUiPerf} from './utils/uiPerf.js';
 
+import type {UIMessage} from 'ai';
+
 interface AppProps {
 	mode?: Mode;
+	sessionId?: string;
+	initialMessages?: UIMessage[];
 }
 
 const MODE_ORDER: Mode[] = ['plan', 'code', 'yolo'];
@@ -23,7 +27,7 @@ const MODE_ORDER: Mode[] = ['plan', 'code', 'yolo'];
  * @param mode - The initial operation mode (`'plan' | 'code' | 'yolo'`). Defaults to `'code'`.
  * @returns The rendered CLI application UI.
  */
-export default function App({mode: initialMode = 'code'}: AppProps) {
+export default function App({mode: initialMode = 'code', sessionId, initialMessages}: AppProps) {
 	const [mode, setMode] = useState<Mode>(initialMode);
 	const [interactionError, setInteractionError] = useState<string | null>(null);
 	const {
@@ -34,7 +38,7 @@ export default function App({mode: initialMode = 'code'}: AppProps) {
 		pendingInteraction,
 		submitToolApproval,
 		submitToolOutput,
-	} = useAgent(mode);
+	} = useAgent(mode, {sessionId, initialMessages});
 
 	const hasPendingInteraction = pendingInteraction != null;
 

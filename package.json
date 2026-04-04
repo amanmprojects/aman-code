@@ -55,12 +55,9 @@
 		"xo": "^0.53.1"
 	},
 	"ava": {
-		"extensions": {
-			"ts": "module",
-			"tsx": "module"
-		},
-		"nodeArguments": [
-			"--loader=ts-node/esm"
+		"files": [
+			"dist/**/*.test.js",
+			"!**/claude-code-for-inspiration/**"
 		]
 	},
 	"xo": {
