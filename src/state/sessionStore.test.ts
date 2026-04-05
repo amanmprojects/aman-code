@@ -44,7 +44,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
 		createdAt: overrides.createdAt ?? now,
 		updatedAt: overrides.updatedAt ?? now,
 		mode: overrides.mode ?? 'code',
-		cwd: overrides.cwd ?? '/tmp/aman-code-test',
+		cwd: overrides.cwd ?? join(tmpdir(), 'aman-code-test'),
 		messages,
 	};
 }

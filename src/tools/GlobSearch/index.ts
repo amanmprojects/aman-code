@@ -286,8 +286,8 @@ export const globSearch = tool({
 			}
 
 			if (
-				(requestedPath && isBlockedDevicePath(requestedPath)) ||
-				isBlockedDevicePath(resolved)
+				(requestedPath && (await isBlockedDevicePath(requestedPath))) ||
+				(await isBlockedDevicePath(resolved))
 			) {
 				return {
 					error: `Cannot search device path: ${
@@ -301,8 +301,9 @@ export const globSearch = tool({
 
 			try {
 				stats = await fs.stat(resolved);
-			} catch (error: any) {
-				if (error?.code === 'ENOENT') {
+			} catch (error: unknown) {
+				const errorRecord = error as {code?: string};
+				if (errorRecord.code === 'ENOENT') {
 					return {
 						error: `Directory does not exist: ${
 							requestedPath ?? resolved
@@ -310,7 +311,7 @@ export const globSearch = tool({
 					};
 				}
 
-				throw error;
+				throw error instanceof Error ? error : new Error(String(error));
 			}
 
 			if (!stats.isDirectory()) {

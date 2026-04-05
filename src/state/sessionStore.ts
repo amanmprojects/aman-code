@@ -32,7 +32,12 @@ function getIndexLockFilePath(): string {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-	return value != null && typeof value === 'object' && !Array.isArray(value);
+	return (
+		value !== undefined &&
+		value !== null &&
+		typeof value === 'object' &&
+		!Array.isArray(value)
+	);
 }
 
 function isValidSessionId(id: string): boolean {
@@ -116,7 +121,8 @@ function isValidUIMessage(message: unknown): message is UIMessage {
 
 function getErrorCode(error: unknown): string | undefined {
 	if (
-		error != null &&
+		error !== undefined &&
+		error !== null &&
 		typeof error === 'object' &&
 		'code' in error &&
 		typeof error.code === 'string'
@@ -220,11 +226,13 @@ async function writeIndex(entries: SessionMetadata[]): Promise<void> {
 		process.pid
 	}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`;
 
+	await writeFile(temporaryFilePath, JSON.stringify(sorted, null, 2), 'utf8');
+
 	try {
-		await writeFile(temporaryFilePath, JSON.stringify(sorted, null, 2), 'utf8');
 		await rename(temporaryFilePath, indexFilePath);
-	} finally {
+	} catch (error: unknown) {
 		await unlink(temporaryFilePath).catch(() => {});
+		throw error;
 	}
 }
 

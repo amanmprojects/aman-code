@@ -207,7 +207,7 @@ function extractPendingInteraction(
 			partIndex -= 1
 		) {
 			const part = message.parts[partIndex];
-			if (part == null || !isToolUIPart(part)) {
+			if (part === undefined || part === null || !isToolUIPart(part)) {
 				continue;
 			}
 
@@ -248,7 +248,8 @@ function extractPendingInteraction(
 			if (part.state === 'input-available' && toolName === 'askUserQuestion') {
 				const rawInput = part.input;
 				if (
-					rawInput == null ||
+					rawInput === undefined ||
+					rawInput === null ||
 					typeof rawInput !== 'object' ||
 					Array.isArray(rawInput)
 				) {
@@ -283,7 +284,8 @@ function extractPendingInteraction(
 					? input['options']
 							.map((option): QuestionOption | undefined => {
 								if (
-									option == null ||
+									option === undefined ||
+									option === null ||
 									typeof option !== 'object' ||
 									Array.isArray(option)
 								) {
@@ -306,7 +308,10 @@ function extractPendingInteraction(
 										: {}),
 								};
 							})
-							.filter((option): option is QuestionOption => option != null)
+							.filter(
+								(option): option is QuestionOption =>
+									option !== undefined && option !== null,
+							)
 					: [];
 
 				if (
@@ -436,13 +441,19 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 			const nextPendingInteraction =
 				extractPendingInteraction(normalizedMessages);
 			setPendingInteraction(previousInteraction => {
-				if (previousInteraction == null && nextPendingInteraction == null) {
+				if (
+					(previousInteraction === undefined || previousInteraction === null) &&
+					(nextPendingInteraction === undefined ||
+						nextPendingInteraction === null)
+				) {
 					return previousInteraction;
 				}
 
 				if (
-					previousInteraction != null &&
-					nextPendingInteraction != null &&
+					previousInteraction !== undefined &&
+					previousInteraction !== null &&
+					nextPendingInteraction !== undefined &&
+					nextPendingInteraction !== null &&
 					JSON.stringify(previousInteraction) ===
 						JSON.stringify(nextPendingInteraction)
 				) {
@@ -644,7 +655,11 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 
 			let nextMessages: UIMessage[];
 
-			if (options.approved && tool.execute != null) {
+			if (
+				options.approved &&
+				tool.execute !== undefined &&
+				tool.execute !== null
+			) {
 				// Execute the tool and transition to output-available
 				try {
 					const toolExecutionOptions: ToolExecutionOptions = {
@@ -653,7 +668,10 @@ export function useAgent(mode: Mode, options?: UseAgentOptions) {
 						abortSignal: undefined,
 						experimental_context: {mode: options.overrideMode ?? mode},
 					};
-					const output = await tool.execute(input, toolExecutionOptions);
+					const output: unknown = await tool.execute(
+						input,
+						toolExecutionOptions,
+					);
 
 					nextMessages = updateToolPartInMessages({
 						messages: messagesRef.current,

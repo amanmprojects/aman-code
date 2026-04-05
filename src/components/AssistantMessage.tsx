@@ -35,7 +35,7 @@ function getLineCount(text: string) {
 function AssistantMessage({message, tailLines}: AssistantMessageProps) {
 	const trimmedTextByIndex = new Map<number, string>();
 
-	if (tailLines != null) {
+	if (tailLines !== undefined) {
 		let tailLinesRemaining = tailLines;
 
 		for (let index = message.parts.length - 1; index >= 0; index -= 1) {
@@ -63,7 +63,9 @@ function AssistantMessage({message, tailLines}: AssistantMessageProps) {
 			{message.parts.map((part, i) => {
 				if (part.type === 'text' && part.text) {
 					const trimmedText =
-						tailLines == null ? part.text : trimmedTextByIndex.get(i) ?? '';
+						tailLines === undefined
+							? part.text
+							: (trimmedTextByIndex.get(i) ?? '');
 
 					if (trimmedText.length === 0) {
 						return null;
@@ -78,7 +80,7 @@ function AssistantMessage({message, tailLines}: AssistantMessageProps) {
 						>
 							<Markdown
 								cacheKey={
-									tailLines == null
+									tailLines === undefined
 										? `${message.id}:text:${i}`
 										: `${message.id}:text:${i}:tail:${tailLines}`
 								}

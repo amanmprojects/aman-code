@@ -28,14 +28,14 @@ export const webSearch = tool({
 		}
 
 		const {execute} = tavilyTool;
-		if (execute === null) {
+		if (execute === undefined || execute === null) {
 			return {
 				error: 'Tavily search tool is unavailable in the current installation.',
 			};
 		}
 
 		try {
-			return await execute!(input, options);
+			return await execute(input, options);
 		} catch (error: unknown) {
 			const message =
 				error instanceof Error

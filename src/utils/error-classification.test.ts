@@ -62,7 +62,7 @@ test('classifyError detects SyntaxException Unexpected token pattern', t => {
 	t.is(classifyError(error), 'malformed-tool-args');
 });
 
-test('classifyError returns null for non-JSON errors', t => {
+test('classifyError returns undefined for non-JSON errors', t => {
 	const error = new Error('Some other error');
 	t.is(classifyError(error), undefined);
 });

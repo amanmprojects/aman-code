@@ -6,10 +6,7 @@ import {
 
 export type Mode = 'plan' | 'code' | 'yolo';
 
-export const modes: Record<
-	Mode,
-	{label: string; color: string; description: string}
-> = {
+export const modes = {
 	plan: {
 		label: 'PLAN',
 		color: 'blue',
@@ -25,7 +22,13 @@ export const modes: Record<
 		color: 'red',
 		description: 'Unrestricted mode — no safety checks',
 	},
-};
+} as const;
+
+export type ModeColor = (typeof modes)[Mode]['color'];
+
+export function isValidMode(value: string): value is Mode {
+	return Object.hasOwn(modes, value);
+}
 
 const readOnlyTools = getReadOnlyToolNames();
 

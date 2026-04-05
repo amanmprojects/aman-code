@@ -1,10 +1,8 @@
 import React, {memo} from 'react';
 import {Box, Text} from 'ink';
+import type {UIMessage} from 'ai';
 
-type Part = {
-	type: string;
-	text: string;
-};
+type TextPart = Extract<UIMessage['parts'][number], {type: 'text'}>;
 
 /**
  * Render a message row showing a green prompt and the message's concatenated text parts.
@@ -12,10 +10,9 @@ type Part = {
  * @param msg - Message object expected to have an `id` (used as the component key) and `parts` (array of `{ type: string; text: string }`) — only parts with `type === 'text'` are joined and displayed.
  * @returns A React element rendering the message row with a green prompt and the message text.
  */
-function UserMessage({msg}: {readonly msg: any}) {
+function UserMessage({msg}: {readonly msg: UIMessage}) {
 	return (
 		<Box
-			key={msg.id}
 			flexDirection="row"
 			borderStyle="round"
 			borderColor="grey"
@@ -27,8 +24,8 @@ function UserMessage({msg}: {readonly msg: any}) {
 			</Text>
 			<Text>
 				{msg.parts
-					.filter((p: Part) => p.type === 'text')
-					.map((p: Part) => p.text)
+					.filter((part): part is TextPart => part.type === 'text')
+					.map(part => part.text)
 					.join('')}
 			</Text>
 		</Box>

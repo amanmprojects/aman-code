@@ -30,7 +30,7 @@ export const writeFile = tool({
 				};
 			}
 
-			if (isBlockedDevicePath(resolved)) {
+			if (await isBlockedDevicePath(resolved)) {
 				return {
 					error: `Cannot write device file: ${filePath}. This file would block or produce infinite output.`,
 				};
@@ -43,20 +43,21 @@ export const writeFile = tool({
 					encoding: 'utf-8',
 					flag: overwrite ? 'w' : 'wx',
 				});
-			} catch (error: any) {
-				if (error?.code === 'EEXIST') {
+			} catch (error: unknown) {
+				const errorRecord = error as {code?: string};
+				if (errorRecord.code === 'EEXIST') {
 					return {
 						error: `File already exists: ${resolved}. Re-run writeFile with overwrite: true to replace it, or use editFile for a targeted change.`,
 					};
 				}
 
-				if (error?.code === 'EISDIR') {
+				if (errorRecord.code === 'EISDIR') {
 					return {
 						error: `Cannot write file because the path is a directory: ${resolved}`,
 					};
 				}
 
-				throw error;
+				throw error instanceof Error ? error : new Error(String(error));
 			}
 
 			const lines = content.split('\n').length;

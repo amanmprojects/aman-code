@@ -104,7 +104,8 @@ export default function InteractivePrompt({
 					void (async () => {
 						try {
 							await onApprove(option.id !== 'deny');
-						} catch {
+						} catch (error: unknown) {
+							console.error('Failed to submit approval decision', error);
 							setSubmitting(false);
 						}
 					})();
@@ -127,7 +128,8 @@ export default function InteractivePrompt({
 				void (async () => {
 					try {
 						await onSubmitAnswer(answer);
-					} catch {
+					} catch (error: unknown) {
+						console.error('Failed to submit interactive answer', error);
 						setSubmitting(false);
 					}
 				})();

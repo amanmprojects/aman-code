@@ -5,6 +5,7 @@ import {render} from 'ink';
 import meow from 'meow';
 import App from './app.js';
 import type {Mode} from './utils/permissions.js';
+import {isValidMode} from './utils/permissions.js';
 import {listSessions, loadSession} from './state/sessionStore.js';
 
 const cli = meow(
@@ -46,9 +47,7 @@ const cli = meow(
 	},
 );
 
-const mode = (
-	['plan', 'code', 'yolo'].includes(cli.flags.mode) ? cli.flags.mode : 'code'
-) as Mode;
+const mode: Mode = isValidMode(cli.flags.mode) ? cli.flags.mode : 'code';
 
 async function main() {
 	if (cli.flags.list) {
@@ -92,9 +91,7 @@ async function main() {
 			process.exit(1);
 		}
 
-		const sessionMode = (
-			['plan', 'code', 'yolo'].includes(session.mode) ? session.mode : mode
-		) as Mode;
+		const sessionMode: Mode = isValidMode(session.mode) ? session.mode : mode;
 
 		render(
 			<App

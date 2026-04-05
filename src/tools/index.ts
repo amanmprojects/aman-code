@@ -73,14 +73,17 @@ const executeCommandWithModeSafety: AgentTool = tool({
 			};
 		}
 
-		if (executeCommand.execute === null) {
+		if (
+			executeCommand.execute === undefined ||
+			executeCommand.execute === null
+		) {
 			return {
 				error:
 					'Command execution tool is unavailable in the current installation.',
 			};
 		}
 
-		return executeCommand.execute!(args, toolOptions);
+		return executeCommand.execute(args, toolOptions);
 	},
 });
 
@@ -100,17 +103,3 @@ export const allTools: AgentToolSet = {
 };
 
 export type AgentToolName = keyof AgentToolSet;
-
-export {readFile} from './ReadFile/index.js';
-export {editFile} from './EditFile/index.js';
-export {writeFile} from './WriteFile/index.js';
-export {grepSearch} from './GrepSearch/index.js';
-export {executeCommand} from './ExecuteCommand/index.js';
-export {listDir} from './ListDir/index.js';
-export {globSearch} from './GlobSearch/index.js';
-
-export {toolSearch} from './ToolSearch/index.js';
-export {askUserQuestion} from './AskUserQuestion/index.js';
-export {webSearch} from './WebSearch/index.js';
-export {todoWrite} from './TodoWrite/index.js';
-export {exitPlanMode} from './ExitPlanMode/index.js';

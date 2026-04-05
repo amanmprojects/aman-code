@@ -12,10 +12,7 @@ export function formatUiPerfDuration(durationMs: number): number {
 
 export function logUiPerf(
 	event: string,
-	details: Record<
-		string,
-		number | string | boolean | undefined | undefined
-	> = {},
+	details: Record<string, number | string | boolean | undefined> = {},
 ): void {
 	if (!uiPerfEnabled) {
 		return;

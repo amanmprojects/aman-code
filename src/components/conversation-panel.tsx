@@ -12,6 +12,7 @@ type ConversationPanelProps = {
 	readonly error: string | undefined;
 };
 
+// Keep roughly one terminal viewport of assistant streaming text visible.
 const streamingVisibleAssistantLines = 28;
 
 function ConversationPanel({

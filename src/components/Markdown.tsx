@@ -1,17 +1,11 @@
 import React, {memo} from 'react';
 import {Text} from 'ink';
 import {marked} from 'marked';
-import * as MarkedTerminalModule from 'marked-terminal';
+import TerminalRenderer from 'marked-terminal';
 
 type MarkdownProps = {
 	readonly children: string;
 	readonly cacheKey?: string;
-};
-
-const {markedTerminal} = MarkedTerminalModule as unknown as {
-	markedTerminal: () => {
-		renderer: Record<string, (...arguments_: unknown[]) => string>;
-	};
 };
 
 const MAX_MARKDOWN_CACHE_ENTRIES = 200;
@@ -21,7 +15,7 @@ const markdownByPartCache = new Map<
 >();
 const markdownByTextCache = new Map<string, string>();
 
-marked.use(markedTerminal());
+marked.setOptions({renderer: new TerminalRenderer()});
 
 function updateCache<TValue>(
 	cache: Map<string, TValue>,
@@ -35,9 +29,9 @@ function updateCache<TValue>(
 	cache.set(key, value);
 
 	if (cache.size > MAX_MARKDOWN_CACHE_ENTRIES) {
-		const oldestKey = cache.keys().next().value;
-		if (oldestKey != null) {
-			cache.delete(oldestKey);
+		const oldestKeyIterator = cache.keys().next();
+		if (oldestKeyIterator.done === false) {
+			cache.delete(oldestKeyIterator.value);
 		}
 	}
 }
@@ -51,7 +45,7 @@ function renderMarkdown(source: string, cacheKey?: string): string {
 	}
 
 	const cachedText = markdownByTextCache.get(source);
-	if (cachedText != null) {
+	if (cachedText !== undefined) {
 		if (cacheKey) {
 			updateCache(markdownByPartCache, cacheKey, {
 				source,

@@ -1,4 +1,4 @@
-import React, {memo} from 'react';
+import React from 'react';
 import {Box} from 'ink';
 import BigText from 'ink-big-text';
 import Divider from 'ink-divider';
@@ -13,4 +13,4 @@ function AppHeader() {
 	);
 }
 
-export default memo(AppHeader);
+export default AppHeader;

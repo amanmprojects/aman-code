@@ -70,7 +70,10 @@ export function createTranscriptStore(): TranscriptStore {
 
 			cachedMessages = snapshot.orderedIds
 				.map(id => snapshot.messagesById[id])
-				.filter((message): message is UIMessage => message !== null);
+				.filter(
+					(message): message is UIMessage =>
+						message !== undefined && message !== null,
+				);
 			cachedOrderedIdsRef = snapshot.orderedIds;
 			cachedMessagesByIdRef = snapshot.messagesById;
 			return cachedMessages;

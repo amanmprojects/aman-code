@@ -8,10 +8,10 @@ type ModeIndicatorProps = {
 };
 
 export default function ModeIndicator({mode}: ModeIndicatorProps) {
-	const info = modes[mode];
+	const {color, label} = modes[mode];
 	return (
-		<Text bold color={info.color as 'blue' | 'yellow' | 'red'}>
-			[{info.label}]
+		<Text bold color={color}>
+			[{label}]
 		</Text>
 	);
 }

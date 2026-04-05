@@ -204,7 +204,7 @@ export const readFile = tool({
 			}
 
 			// Security: Block device files that would hang or produce infinite output
-			if (isBlockedDevicePath(resolved)) {
+			if (await isBlockedDevicePath(resolved)) {
 				return {
 					error: `Cannot read device file: ${filePath}. This file would block or produce infinite output.`,
 				};
@@ -214,8 +214,9 @@ export const readFile = tool({
 			let stat: Stats;
 			try {
 				stat = await fs.lstat(resolved);
-			} catch (error: any) {
-				if (error?.code === 'ENOENT') {
+			} catch (error: unknown) {
+				const errorRecord = error as {code?: string};
+				if (errorRecord.code === 'ENOENT') {
 					// Try to provide helpful suggestions
 					let message = `File not found: ${resolved}. Current working directory: ${cwd}.`;
 
@@ -234,7 +235,7 @@ export const readFile = tool({
 					return {error: message};
 				}
 
-				throw error;
+				throw error instanceof Error ? error : new Error(String(error));
 			}
 
 			// Check if it's a directory

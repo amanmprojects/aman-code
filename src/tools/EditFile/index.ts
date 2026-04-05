@@ -92,7 +92,7 @@ export const editFile = tool({
 				};
 			}
 
-			if (isBlockedDevicePath(resolved)) {
+			if (await isBlockedDevicePath(resolved)) {
 				return {
 					error: `Cannot edit device file: ${filePath}. This file would block or produce infinite output.`,
 				};
@@ -107,12 +107,13 @@ export const editFile = tool({
 			let stat;
 			try {
 				stat = await fs.stat(resolved);
-			} catch (error: any) {
-				if (error?.code === 'ENOENT') {
+			} catch (error: unknown) {
+				const errorRecord = error as {code?: string};
+				if (errorRecord.code === 'ENOENT') {
 					return {error: `File not found: ${resolved}`};
 				}
 
-				throw error;
+				throw error instanceof Error ? error : new Error(String(error));
 			}
 
 			if (stat.isDirectory()) {
@@ -159,7 +160,7 @@ export const editFile = tool({
 				? original.split(normalizedOldString).join(normalizedNewString)
 				: original.replace(normalizedOldString, normalizedNewString);
 
-			await fs.writeFile(resolved, updated, 'utf-8');
+			await fs.writeFile(resolved, updated, 'utf8');
 
 			const diff = createPatch(
 				path.basename(resolved),

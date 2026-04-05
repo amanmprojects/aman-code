@@ -11,7 +11,7 @@ const DANGEROUS_PATTERNS = [
 	/rm\s+(-[a-zA-Z]*)?f[a-zA-Z]*r?\s+\/(?!\S)/,
 	/mkfs/,
 	/dd\s+if=/,
-	/:\(\){\s*:\|:&\s*};/, // Fork bomb pattern
+	/:\(\)\s*{\s*:\|:&\s*};/, // Fork bomb pattern
 	/>\s*\/dev\/sd[a-z]/,
 	/chmod\s+(-R\s+)?777\s+\//,
 	/chown\s+(-R\s+)?.*\s+\//,

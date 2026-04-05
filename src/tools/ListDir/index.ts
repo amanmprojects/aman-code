@@ -76,8 +76,8 @@ async function mapWithConcurrency<T, U>(
 	concurrency: number,
 	mapper: (item: T) => Promise<U>,
 ): Promise<U[]> {
-	const results: U[] = [];
-	results.length = items.length;
+	// eslint-disable-next-line unicorn/no-new-array
+	const results = new Array<U>(items.length);
 	let nextIndex = 0;
 
 	async function worker(): Promise<void> {
@@ -143,7 +143,7 @@ export const listDir = tool({
 				};
 			}
 
-			if (isBlockedDevicePath(resolvedPath)) {
+			if (await isBlockedDevicePath(resolvedPath)) {
 				return {
 					error: `Cannot list device path: ${
 						inputPath ?? resolvedPath
@@ -207,15 +207,18 @@ export const listDir = tool({
 				totalCount: sortedEntries.length,
 				truncated: sortedEntries.length > results.length,
 			};
-		} catch (error: any) {
-			if (error?.code === 'ENOENT') {
+		} catch (error: unknown) {
+			const errorRecord = error as {code?: string; message?: string};
+			if (errorRecord.code === 'ENOENT') {
 				return {
 					error: `Directory does not exist: ${inputPath ?? process.cwd()}`,
 				};
 			}
 
 			const message =
-				typeof error?.message === 'string' ? error.message : String(error);
+				typeof errorRecord.message === 'string'
+					? errorRecord.message
+					: String(error);
 			return {
 				error: `Failed to list directory: ${message}`,
 			};

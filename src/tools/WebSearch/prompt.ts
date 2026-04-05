@@ -1,5 +1,3 @@
-export const webSearchToolName = 'webSearch';
-
 /**
  * Renders the webSearch tool description with detailed usage instructions.
  */

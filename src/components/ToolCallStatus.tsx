@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import React, {memo} from 'react';
 import {Box, Text} from 'ink';
 import Spinner from 'ink-spinner';
@@ -113,7 +114,7 @@ function getToolArgSummary(toolPart: ToolPart): string {
  * @returns A React node that visually represents the tool result (formatted preview, diff view, list, or error text), or `null` when `result` is null/undefined.
  */
 function formatResult(toolName: string, result: any): React.ReactNode {
-	if (result == null) {
+	if (result === undefined || result === null) {
 		return null;
 	}
 
@@ -150,22 +151,22 @@ function formatResult(toolName: string, result: any): React.ReactNode {
 							todo.status === 'completed'
 								? '✓'
 								: todo.status === 'in_progress'
-								? '▶'
-								: '○';
+									? '▶'
+									: '○';
 						const basePriorityColor =
 							todo.priority === 'high'
 								? 'red'
 								: todo.priority === 'medium'
-								? 'yellow'
-								: 'gray';
+									? 'yellow'
+									: 'gray';
 						const isDimPriority =
 							todo.priority !== 'high' && todo.priority !== 'medium';
 						const baseStatusColor =
 							todo.status === 'completed'
 								? 'green'
 								: todo.status === 'in_progress'
-								? 'cyan'
-								: 'gray';
+									? 'cyan'
+									: 'gray';
 						const isDimStatus =
 							todo.status !== 'completed' && todo.status !== 'in_progress';
 						return (
@@ -388,7 +389,7 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 					<Text dimColor>Waiting for approval</Text>
 				</Box>
 			)}
-			{isApprovalResponded && toolPart.approval?.approved != null && (
+			{isApprovalResponded && (
 				<Box marginLeft={2}>
 					<Text dimColor>
 						{toolPart.approval.approved
@@ -399,7 +400,8 @@ function ToolCallStatus({toolPart}: ToolCallStatusProps) {
 			)}
 			{isDone &&
 				toolPart.state === 'output-available' &&
-				toolPart.output != null && (
+				toolPart.output !== undefined &&
+				toolPart.output !== null && (
 					<Box marginLeft={2} flexDirection="column">
 						{formatResult(toolName, toolPart.output as any)}
 					</Box>

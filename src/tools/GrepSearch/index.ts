@@ -161,7 +161,11 @@ function formatRipgrepLine(
 	const displayPath = toRelativePath(record.filePath);
 	const lineText = record.text.replace(/\n$/, '');
 
-	if (showLineNumbers && record.lineNumber != null) {
+	if (
+		showLineNumbers &&
+		record.lineNumber !== undefined &&
+		record.lineNumber !== null
+	) {
 		return `${displayPath}:${record.lineNumber}:${lineText}`;
 	}
 
@@ -310,8 +314,8 @@ export const grepSearch = tool({
 			}
 
 			if (
-				(targetPath && isBlockedDevicePath(targetPath)) ||
-				isBlockedDevicePath(resolved)
+				(targetPath && (await isBlockedDevicePath(targetPath))) ||
+				(await isBlockedDevicePath(resolved))
 			) {
 				return {error: searchPathError(targetPath ?? resolved, 'device')};
 			}
@@ -323,8 +327,9 @@ export const grepSearch = tool({
 						error: `Path is not a file or directory: ${targetPath ?? resolved}`,
 					};
 				}
-			} catch (error: any) {
-				if (error?.code === 'ENOENT') {
+			} catch (error: unknown) {
+				const errorRecord = error as {code?: string};
+				if (errorRecord.code === 'ENOENT') {
 					return {
 						error: `Path does not exist: ${
 							targetPath ?? resolved
@@ -332,7 +337,7 @@ export const grepSearch = tool({
 					};
 				}
 
-				throw error;
+				throw error instanceof Error ? error : new Error(String(error));
 			}
 
 			const args: string[] = ['--hidden'];
@@ -499,7 +504,7 @@ export const grepSearch = tool({
 				.map((filePath: string, index: number) => {
 					const result = stats[index]!;
 					const mtimeMs =
-						result.status === 'fulfilled' ? result.value.mtimeMs ?? 0 : 0;
+						result.status === 'fulfilled' ? (result.value.mtimeMs ?? 0) : 0;
 					return {filePath, mtimeMs};
 				})
 				.sort(
@@ -560,13 +565,22 @@ export const grepSearch = tool({
 				...(offset > 0 && {appliedOffset: offset}),
 				...(limitInfo && {paginationInfo: limitInfo}),
 			};
-		} catch (error: any) {
-			const missingPath = typeof error.path === 'string' ? error.path : '';
+		} catch (error: unknown) {
+			const typedError =
+				error instanceof Error
+					? error
+					: new Error(typeof error === 'string' ? error : String(error));
+			const errorRecord = typedError as Error & {
+				code?: string;
+				path?: string;
+			};
+			const missingPath =
+				typeof errorRecord.path === 'string' ? errorRecord.path : '';
 			const missingRg =
 				missingPath === 'rg' ||
 				missingPath.endsWith(`${path.sep}rg`) ||
-				(typeof error.message === 'string' && error.message.includes('rg'));
-			if (error.code === 'ENOENT' && missingRg) {
+				typedError.message.includes('rg');
+			if (errorRecord.code === 'ENOENT' && missingRg) {
 				return {
 					error:
 						'ripgrep (rg) is not installed. Please install ripgrep to use the grepSearch tool. See: https://github.com/BurntSushi/ripgrep#installation',
@@ -574,7 +588,7 @@ export const grepSearch = tool({
 			}
 
 			return {
-				error: `Search failed: ${error.message || error}`,
+				error: `Search failed: ${typedError.message}`,
 			};
 		}
 	},

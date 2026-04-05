@@ -25,7 +25,7 @@ function tokenize(value: string): string[] {
  */
 function scoreTool(name: ToolName, query: string): number {
 	const metadata = getToolMetadata(name);
-	if (metadata == null) {
+	if (metadata === undefined) {
 		return 0;
 	}
 
@@ -87,7 +87,7 @@ export const toolSearch = tool({
 		const results = allToolNames
 			.map(name => {
 				const metadata = getToolMetadata(name);
-				if (metadata == null) {
+				if (metadata === undefined) {
 					return null;
 				}
 
@@ -108,7 +108,10 @@ export const toolSearch = tool({
 					score: scoreTool(name, query),
 				};
 			})
-			.filter((value): value is NonNullable<typeof value> => value != null)
+			.filter(
+				(value): value is NonNullable<typeof value> =>
+					value !== undefined && value !== null,
+			)
 			.filter(value => query.trim().length === 0 || value.score > 0)
 			.sort(
 				(left, right) =>

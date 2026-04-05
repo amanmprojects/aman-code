@@ -120,7 +120,7 @@ export function getAllowedToolNamesForMode(mode: Mode): Set<ToolName> {
 	return new Set(
 		allToolNames.filter(name => {
 			const metadata = toolMetadata[name] as ToolMetadata | undefined;
-			return metadata != null && metadata.allowedModes.includes(mode);
+			return metadata !== undefined && metadata.allowedModes.includes(mode);
 		}),
 	);
 }
@@ -134,7 +134,7 @@ export function getReadOnlyToolNames(): Set<ToolName> {
 	return new Set(
 		allToolNames.filter(name => {
 			const metadata = toolMetadata[name] as ToolMetadata | undefined;
-			return metadata != null && metadata.readOnly;
+			return metadata !== undefined && metadata.readOnly;
 		}),
 	);
 }

@@ -38,7 +38,7 @@ const MessageRow = memo(function MessageRow({
 }: MessageRowProps) {
 	const message = useTranscriptMessage(transcriptStore, id);
 
-	if (message == null) {
+	if (message === undefined || message === null) {
 		return null;
 	}
 
